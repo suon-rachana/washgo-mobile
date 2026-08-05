@@ -48,10 +48,24 @@ export default function ProfileScreen() {
   const unreadNotificationCount = useMemo(() => getUnreadNotificationCount(notifications), [notifications]);
 
   const authProfile = useAuthStore((state) => state.profile);
+  const authUser = useAuthStore((state) => state.user);
   const signOutFromSupabase = useAuthStore((state) => state.signOut);
-  const displayName = isSupabaseDataSource ? authProfile?.full_name || mockUser.fullName : mockUser.fullName;
-  const displayPhone = isSupabaseDataSource ? authProfile?.phone || '' : mockUser.phone;
-  const displayEmail = isSupabaseDataSource ? authProfile?.email || '' : mockUser.email;
+
+  // Supabase mode must never fall back to the mock user — a missing
+  // `profiles` row (fetch error, trigger lag, RLS denial) should read as
+  // "no data yet", not silently resurrect the prototype's fake identity.
+  // `user_metadata.full_name` is Supabase Auth's own copy of the name (set
+  // at sign-up), so it's a real fallback, not a mock one.
+  const metadataFullName = authUser?.user_metadata?.full_name;
+  const displayName = isSupabaseDataSource
+    ? authProfile?.full_name?.trim() ||
+      (typeof metadataFullName === 'string' ? metadataFullName.trim() : '') ||
+      'WashGo User'
+    : mockUser.fullName;
+  const displayPhone = isSupabaseDataSource ? authProfile?.phone?.trim() || '' : mockUser.phone;
+  const displayEmail = isSupabaseDataSource
+    ? authProfile?.email?.trim() || authUser?.email || ''
+    : mockUser.email;
 
   const handleEditProfile = () => router.push(PERSONAL_INFORMATION_HREF);
 

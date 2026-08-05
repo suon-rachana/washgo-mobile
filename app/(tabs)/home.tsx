@@ -8,11 +8,13 @@ import { CategoryPill, PromoBanner, SectionHeader } from '@/src/components/commo
 import { LaundryCard } from '@/src/components/laundry';
 import { NotificationBadge } from '@/src/components/notification';
 import { Chip, EmptyState, Input } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
 import { categories, laundries, mockUser, promotions, services, type Laundry } from '@/src/data/mock';
 import { getUnreadNotificationCount } from '@/src/data/mock/notifications';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
+import { useAuthStore } from '@/src/store/auth';
 import { useNotificationsStore } from '@/src/store/notifications';
 import { ColorScheme, Radius, Spacing } from '@/src/theme';
 import { matchesSearch } from '@/src/utils/search';
@@ -24,6 +26,15 @@ import { matchesSearch } from '@/src/utils/search';
 const SHOPS_HREF = '/shops' as Href;
 const NOTIFICATIONS_HREF = '/notifications' as Href;
 
+// WashGo's launch city (see app/about, docs/01_PROJECT_FOUNDATION.md) — a
+// real product default, not the mock user. Used in Supabase mode only until
+// a saved-address store exists to prefer the customer's default address.
+const DEFAULT_LOCATION_LABEL = 'Siem Reap, Cambodia';
+
+function firstNameFrom(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] ?? '';
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -34,6 +45,25 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const notifications = useNotificationsStore((state) => state.notifications);
   const unreadNotificationCount = useMemo(() => getUnreadNotificationCount(notifications), [notifications]);
+
+  const authProfile = useAuthStore((state) => state.profile);
+  const authUser = useAuthStore((state) => state.user);
+
+  // Same fallback chain as the Profile tab: real profile row, then Supabase
+  // Auth's own metadata copy, then a neutral greeting — never mockUser.
+  const metadataFullName = authUser?.user_metadata?.full_name;
+  const authFullName =
+    authProfile?.full_name?.trim() ||
+    (typeof metadataFullName === 'string' ? metadataFullName.trim() : '');
+  const displayFirstName = isSupabaseDataSource
+    ? firstNameFrom(authFullName) || 'there'
+    : mockUser.firstName;
+
+  // No saved-address store is wired up yet (addressService exists but isn't
+  // read from anywhere reactive), so this can't prefer a default address
+  // without fetching from the screen — falls back to the app's real launch
+  // city instead of the mock user's location.
+  const displayLocation = isSupabaseDataSource ? DEFAULT_LOCATION_LABEL : mockUser.location;
 
   const isSearching = searchQuery.trim().length > 0;
 
@@ -60,7 +90,7 @@ export default function HomeScreen() {
         <View style={styles.topRow}>
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-            <Text style={styles.locationText}>{mockUser.location}</Text>
+            <Text style={styles.locationText}>{displayLocation}</Text>
           </View>
           <Pressable
             onPress={() => router.push(NOTIFICATIONS_HREF)}
@@ -79,7 +109,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.greeting}>{t('goodMorning')}, {mockUser.firstName}</Text>
+        <Text style={styles.greeting}>{t('goodMorning')}, {displayFirstName}</Text>
         <Text style={styles.subtitle}>{t('letUsHandleYourLaundry')}</Text>
 
         <Input

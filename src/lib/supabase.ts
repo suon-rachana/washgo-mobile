@@ -1,42 +1,54 @@
-import 'react-native-url-polyfill/auto';
+import "react-native-url-polyfill/auto";
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { AppState, Platform } from "react-native";
 
-import { env, getSupabaseConfigError, isSupabaseConfigured } from '@/src/config/env';
-import type { Database } from '@/src/types/database';
+import { env } from "@/src/config/env";
+import type { Database } from "@/src/types/database";
 
-function createSupabaseClient(): SupabaseClient<Database> | null {
-  if (!isSupabaseConfigured()) {
-    if (__DEV__) {
-      console.warn(`[WashGo] ${getSupabaseConfigError()}`);
+export const supabase: SupabaseClient<Database> | null =
+  env.supabaseUrl && env.supabaseAnonKey
+    ? createClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+        auth: {
+          // AsyncStorage must only be used on native platforms.
+          ...(Platform.OS !== "web"
+            ? {
+                storage: AsyncStorage,
+              }
+            : {}),
+
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+        },
+      })
+    : null;
+
+// React Native suspends JS timers while the app is backgrounded, so the
+// client's internal auto-refresh ticker stalls with it. Without this, an
+// access token that expires while backgrounded stays unrefreshed until
+// something happens to trigger a refresh — and auth.getUser() (which sends
+// the current token to the Auth server as-is, unlike auth.getSession(),
+// which proactively refreshes an expired token first) can then fail right
+// after the app resumes. This is Supabase's documented React Native setup:
+// https://supabase.com/docs/reference/javascript/initializing?example=react-native-options
+if (supabase) {
+  AppState.addEventListener("change", (state) => {
+    if (state === "active") {
+      supabase.auth.startAutoRefresh();
+    } else {
+      supabase.auth.stopAutoRefresh();
     }
-    return null;
-  }
-
-  return createClient<Database>(env.supabaseUrl as string, env.supabaseAnonKey as string, {
-    auth: {
-      storage: AsyncStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      // There's no browser redirect URL to parse tokens out of in React Native.
-      detectSessionInUrl: false,
-    },
   });
 }
 
-// Single shared client instance for the whole app — screens and services
-// must import this rather than calling createClient() themselves. Null when
-// EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY are missing, so
-// importing this module never crashes the app at startup.
-export const supabase: SupabaseClient<Database> | null = createSupabaseClient();
-
-// Use inside a codepath that has already confirmed Supabase mode is active
-// (isSupabaseDataSource) — turns a missing client into one clear error
-// instead of a null-reference crash deep inside a query.
 export function getSupabaseClient(): SupabaseClient<Database> {
   if (!supabase) {
-    throw new Error(getSupabaseConfigError() ?? 'Supabase client is not configured.');
+    throw new Error(
+      "Supabase is not configured. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.",
+    );
   }
+
   return supabase;
 }

@@ -22,6 +22,8 @@ export default function AddAddressScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSave = async (values: AddressFormValues) => {
+    if (isSaving) return;
+
     if (!isSupabaseDataSource) {
       // Mock only — nothing to persist to. Log so the submitted values are
       // visible during development, then return to the address list.

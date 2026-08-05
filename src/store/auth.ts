@@ -1,18 +1,26 @@
-import type { Session, User } from '@supabase/supabase-js';
-import { create } from 'zustand';
+import type { Session, User } from "@supabase/supabase-js";
+import { create } from "zustand";
 
-import { isSupabaseDataSource } from '@/src/config/dataSource';
-import { authService, type AuthErrorCode, type SignInInput, type SignUpInput } from '@/src/services/authService';
-import { profileService } from '@/src/services/profileService';
-import type { Profile } from '@/src/types/database';
+import { isSupabaseDataSource } from "@/src/config/dataSource";
+import {
+  authService,
+  type AuthErrorCode,
+  type SignInInput,
+  type SignUpInput,
+} from "@/src/services/authService";
+import { profileService } from "@/src/services/profileService";
+import type { Profile } from "@/src/types/database";
 
 interface AuthState {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+
   isInitializing: boolean;
   isAuthenticated: boolean;
+
   error: AuthErrorCode | null;
+
   initialize: () => Promise<void>;
   signIn: (input: SignInInput) => Promise<boolean>;
   signUp: (input: SignUpInput) => Promise<boolean>;
@@ -21,85 +29,191 @@ interface AuthState {
   clearError: () => void;
 }
 
-// Module-level, not store state: the auth-state-change subscription must
-// survive across every store update, and `initialize` must be a safe no-op
-// on repeat calls (StrictMode double-invokes effects; multiple screens may
-// also mount an effect that calls it).
 let unsubscribeAuthListener: (() => void) | null = null;
 let hasInitialized = false;
 
-// Global auth/session state — Supabase mode only. In mock mode this store
-// stays idle (isInitializing flips to false immediately, isAuthenticated
-// stays false) so the existing prototype's own navigation calls keep
-// working untouched.
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
   profile: null,
+
   isInitializing: true,
   isAuthenticated: false,
+
   error: null,
 
   initialize: async () => {
-    if (hasInitialized) return;
-    hasInitialized = true;
-
-    if (!isSupabaseDataSource) {
-      set({ isInitializing: false });
+    if (hasInitialized) {
       return;
     }
 
-    const session = await authService.getSession();
-    set({ session, user: session?.user ?? null, isAuthenticated: !!session });
+    hasInitialized = true;
 
-    if (session) {
-      await get().refreshProfile();
+    if (!isSupabaseDataSource) {
+      set({
+        isInitializing: false,
+        isAuthenticated: false,
+        session: null,
+        user: null,
+        profile: null,
+      });
+
+      return;
     }
-    set({ isInitializing: false });
 
-    unsubscribeAuthListener?.();
-    unsubscribeAuthListener = authService.onAuthStateChange((nextSession) => {
-      set({ session: nextSession, user: nextSession?.user ?? null, isAuthenticated: !!nextSession });
-      if (nextSession) {
-        get().refreshProfile();
+    try {
+      const session = await authService.getSession();
+
+      set({
+        session,
+        user: session?.user ?? null,
+        isAuthenticated: Boolean(session),
+        error: null,
+      });
+
+      if (session) {
+        await get().refreshProfile();
       } else {
         set({ profile: null });
       }
-    });
+
+      unsubscribeAuthListener?.();
+
+      unsubscribeAuthListener = authService.onAuthStateChange((nextSession) => {
+        set({
+          session: nextSession,
+          user: nextSession?.user ?? null,
+          isAuthenticated: Boolean(nextSession),
+          error: null,
+        });
+
+        if (nextSession) {
+          void get().refreshProfile();
+        } else {
+          set({ profile: null });
+        }
+      });
+    } catch (error) {
+      console.error("[WashGo] Auth initialization failed:", error);
+
+      set({
+        session: null,
+        user: null,
+        profile: null,
+        isAuthenticated: false,
+        error: "unknown",
+      });
+    } finally {
+      set({ isInitializing: false });
+    }
   },
 
   signIn: async (input) => {
-    set({ error: null });
-    const { error } = await authService.signIn(input);
-    if (error) {
-      set({ error });
+    set({
+      error: null,
+      session: null,
+      user: null,
+      profile: null,
+      isAuthenticated: false,
+    });
+
+    const result = await authService.signIn(input);
+
+    if (result.error) {
+      set({
+        error: result.error,
+        session: null,
+        user: null,
+        profile: null,
+        isAuthenticated: false,
+      });
+
       return false;
     }
+
+    const session = await authService.getSession();
+
+    if (!session) {
+      set({
+        error: "unknown",
+        session: null,
+        user: null,
+        profile: null,
+        isAuthenticated: false,
+      });
+
+      return false;
+    }
+
+    set({
+      session,
+      user: session.user,
+      isAuthenticated: true,
+      error: null,
+    });
+
+    await get().refreshProfile();
+
     return true;
   },
 
   signUp: async (input) => {
     set({ error: null });
-    const { error } = await authService.signUp(input);
-    if (error) {
-      set({ error });
+
+    const result = await authService.signUp(input);
+
+    if (result.error) {
+      set({ error: result.error });
       return false;
     }
+
+    // Supabase may return no active session when email confirmation is enabled.
+    const session = await authService.getSession();
+
+    if (session) {
+      set({
+        session,
+        user: session.user,
+        isAuthenticated: true,
+        error: null,
+      });
+
+      await get().refreshProfile();
+    }
+
     return true;
   },
 
   signOut: async () => {
-    await authService.signOut();
-    set({ session: null, user: null, profile: null, isAuthenticated: false, error: null });
+    const result = await authService.signOut();
+
+    if (result.error && result.error !== "not_configured") {
+      set({ error: result.error });
+      return;
+    }
+
+    set({
+      session: null,
+      user: null,
+      profile: null,
+      isAuthenticated: false,
+      error: null,
+    });
   },
 
   refreshProfile: async () => {
-    // A missing profile row (e.g. the trigger hasn't caught up yet) isn't a
-    // fatal auth error — leave `profile` null and let the UI show its own
-    // "unable to load profile" state rather than surfacing a sign-in error.
-    const { data } = await profileService.fetchCurrentProfile();
-    set({ profile: data });
+    try {
+      const { data } = await profileService.fetchCurrentProfile();
+
+      set({ profile: data });
+    } catch (error) {
+      console.error("[WashGo] Unable to load current profile:", error);
+
+      set({ profile: null });
+    }
   },
 
-  clearError: () => set({ error: null }),
+  clearError: () => {
+    set({ error: null });
+  },
 }));

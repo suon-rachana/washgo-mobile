@@ -154,7 +154,13 @@ export default function SavedAddressesScreen() {
     if (error) {
       setAddresses(previous);
       Alert.alert(t('unableToUpdateAddress'), undefined, [{ text: t('cancel'), style: 'cancel' }]);
+      return;
     }
+
+    // Optimistic update above is what the user sees immediately; reconcile
+    // quietly with Supabase afterward so the list can't drift from the
+    // server's actual is_default state.
+    loadAddresses(true);
   };
 
   const handleDelete = (address: DisplayAddress) => {
@@ -183,11 +189,17 @@ export default function SavedAddressesScreen() {
             return;
           }
 
+          // Remove it from view immediately rather than waiting on a refetch.
           const remaining = addresses.filter((item) => item.id !== address.id);
+          setAddresses(remaining);
+
+          // Deleting the default address promotes the next-oldest remaining
+          // one — same documented rule as mock mode above.
           if (address.isDefault && remaining.length > 0) {
             await addressService.setDefault(remaining[0].id);
           }
-          loadAddresses();
+
+          loadAddresses(true);
         },
       },
     ]);
