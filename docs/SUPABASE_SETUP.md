@@ -49,16 +49,22 @@ read at bundle time):
 npx expo start -c
 ```
 
-## 4. Run the SQL migration
+## 4. Run the SQL migrations
 
-In the Supabase dashboard: **SQL Editor → New query**. Paste the full
-contents of [`supabase/migrations/001_initial_schema.sql`](../supabase/migrations/001_initial_schema.sql)
-and click **Run**.
+In the Supabase dashboard: **SQL Editor → New query**. Run each file in
+`supabase/migrations/` **in order** (001 → 002 → 003 → 004), pasting its full
+contents and clicking **Run** before moving to the next:
 
-This creates every Phase-1-and-beyond table (`profiles`, `addresses`,
-`laundries`, `laundry_services`, `orders`, `order_items`,
-`order_status_history`, `notifications`, `payments`, `favorites`), the
-`profiles` row-creation trigger, and all Row Level Security policies.
+1. [`001_initial_schema.sql`](../supabase/migrations/001_initial_schema.sql) —
+   every table (`profiles`, `addresses`, `laundries`, `laundry_services`,
+   `orders`, `order_items`, `order_status_history`, `notifications`,
+   `payments`, `favorites`), the `profiles` row-creation trigger, and all
+   Row Level Security policies.
+2. [`002_backfill_missing_profiles.sql`](../supabase/migrations/002_backfill_missing_profiles.sql)
+3. [`003_grant_authenticated_permissions.sql`](../supabase/migrations/003_grant_authenticated_permissions.sql)
+4. [`004_order_creation_and_status.sql`](../supabase/migrations/004_order_creation_and_status.sql) —
+   `create_order()` and `advance_order_status()`, the only way orders ever
+   get written (see Phase 4 below).
 
 If you prefer the Supabase CLI instead of the dashboard:
 
@@ -163,29 +169,62 @@ Complete steps 1-5 above, set EXPO_PUBLIC_DATA_SOURCE=supabase
 → Edit an address → Delete an address (with confirmation)
 → Create a second Supabase user and confirm it cannot see the first user's
   addresses or profile (RLS)
+→ Home / Laundries tab → confirm real laundries load (empty until you seed
+  some — see "Recommended next phase" below)
+→ Pick a laundry → Choose Services → select one of its real services →
+  Pickup → choose a saved address (or Add New Address) → Schedule Pickup →
+  Request Pickup → choose Cash on Delivery → Confirm Pickup
+→ In the Supabase dashboard: Table Editor → orders/order_items — confirm a
+  row exists with the right subtotal/total and one order_items row per
+  selected service
+→ Orders tab → confirm the new order appears under Active
+→ Track Order → tap "Simulate Next Update (Demo)" a few times → confirm the
+  timeline advances and a matching row appears in order_status_history
+→ Notifications → confirm a notification appeared for each simulated step
 → Log Out → confirm the back gesture from /login cannot reopen (tabs)
 ```
 
-## Current limitations (Phase 1)
+## Current limitations (Phase 4)
 
-- Orders, notifications, payments, laundries/services, favorites, and
-  riders have schema + RLS but are **not** wired into the app — those
-  screens still use `src/data/mock`.
+- **Payments are storage-only.** `payment-methods/*` screens still show mock
+  data; orders record a `payment_method` at creation but nothing actually
+  charges a card. This is intentional for now — see the project roadmap.
+- **No rider/laundry-shop app exists yet.** `advance_order_status()` lets a
+  customer advance their own order through its lifecycle as an explicit
+  demo stand-in (the tracking screen's "Simulate Next Update (Demo)"
+  button) — not a real access-control model. The Tracking screen's rider
+  card is shown for mock orders only, since there's no real rider data to
+  show for a Supabase order.
+- **No promotions table.** Real orders never apply a discount; the discount
+  preview shown during booking (mock's promo banner) only appears in mock
+  mode so what's previewed always matches what `create_order()` actually
+  charges.
+- **No dedicated "size estimate" column.** The pickup flow's size selector
+  is mock-only display for now — a real column would need its own
+  migration.
 - Sign-in/sign-up is email + password only; the login screen's "Phone or
   Email" field only accepts an email in Supabase mode.
 - Password reset has a service method (`authService.requestPasswordReset`)
   but no screen calls it yet.
 - Avatar upload has a profile-service method (`updateAvatarUrl`) but no
   image picker/upload flow yet.
-- The Profile tab's summary card reads the live profile in Supabase mode,
-  but most other screens (Favorites, Notifications, Orders, Payment
-  Methods) are unaffected by this phase and still show mock data.
+- `app/services/index.tsx` (Choose Services), `app/pickup/index.tsx`
+  (address selection), `app/summary/index.tsx`, and `app/payment/index.tsx`
+  now read/write real Supabase data end-to-end; every other booking-flow
+  screen not listed here still reads mock data unless noted otherwise above.
 
 ## Recommended next phase
 
-Wire up Favorites and Notifications (both already have schema + RLS and are
-comparatively low-risk since they're single-owner tables like `addresses`),
-then Orders — which needs the order-creation flow, `order_items`, and a
-secure way to advance `order_status` (a Postgres function or edge function,
-since customers intentionally have no direct UPDATE policy on `orders` in
-this phase).
+Laundries, services, favorites, notifications, and orders are wired up.
+What's left, in rough priority order:
+
+1. **Seed real laundry/service data** — Phase 2 wired the reads, but nothing
+   has been inserted into `laundries`/`laundry_services` yet, so Supabase
+   mode shows empty lists until real (or realistic placeholder) shops exist.
+2. **Real payment processing** — actually charging a card/wallet via a
+   payment gateway (e.g. ABA PayWay). Current scope intentionally stops at
+   storing the chosen method.
+3. **A real rider/laundry-shop side** to replace `advance_order_status()`'s
+   customer-driven demo control with actual role-scoped status updates.
+4. The smaller gaps listed above (phone auth, password reset screen, avatar
+   upload flow, a real `orders.size` column).

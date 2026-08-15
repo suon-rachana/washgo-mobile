@@ -188,7 +188,8 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        // Not wired into the app in this phase — no client Insert/Update yet.
+        // No direct client Insert/Update — writes only ever go through the
+        // create_order()/advance_order_status() RPCs (Phase 4).
         Insert: never;
         Update: never;
         Relationships: [];
@@ -199,6 +200,7 @@ export interface Database {
           order_id: string;
           service_id: string | null;
           service_name: string;
+          pricing_unit: PricingUnit;
           quantity: number;
           unit_price: number;
           line_total: number;
@@ -275,6 +277,27 @@ export interface Database {
         Args: { p_address_id: string };
         Returns: void;
       };
+      create_order: {
+        Args: {
+          p_laundry_id: string;
+          // [{"service_id": string, "quantity"?: number}, ...] — see
+          // supabase/migrations/004_order_creation_and_status.sql.
+          p_items: CreateOrderItemInput[];
+          p_address_label: string | null;
+          p_address_line: string;
+          p_address_latitude: number | null;
+          p_address_longitude: number | null;
+          p_delivery_instructions: string | null;
+          p_pickup_scheduled_at: string | null;
+          p_notes: string | null;
+          p_payment_method: PaymentMethodType;
+        };
+        Returns: string;
+      };
+      advance_order_status: {
+        Args: { p_order_id: string };
+        Returns: OrderStatus;
+      };
     };
     Enums: {
       user_role: UserRole;
@@ -298,3 +321,11 @@ export type LaundryServiceRow = Database['public']['Tables']['laundry_services']
 export type NotificationRow = Database['public']['Tables']['notifications']['Row'];
 export type FavoriteRow = Database['public']['Tables']['favorites']['Row'];
 export type FavoriteInsert = Database['public']['Tables']['favorites']['Insert'];
+export type OrderRow = Database['public']['Tables']['orders']['Row'];
+export type OrderItemRow = Database['public']['Tables']['order_items']['Row'];
+export type OrderStatusHistoryRow = Database['public']['Tables']['order_status_history']['Row'];
+
+export interface CreateOrderItemInput {
+  service_id: string;
+  quantity?: number;
+}

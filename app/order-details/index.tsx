@@ -6,24 +6,14 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SectionHeader } from '@/src/components/common';
 import { AppScreen } from '@/src/components/layout';
 import { OrderTimeline } from '@/src/components/order';
-import { ActionSheet, Badge, Button, Card } from '@/src/components/ui';
-import {
-  addresses,
-  dateOptions,
-  getOrderById,
-  getOrderStatusLabelKey,
-  laundries,
-  orderSteps,
-  promotions,
-  services,
-  sizeOptions,
-  timeOptions,
-} from '@/src/data/mock';
+import { ActionSheet, Badge, Button, Card, ErrorState, LoadingState } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
+import { getOrderStatusLabelKey, orderSteps } from '@/src/data/mock';
+import { useOrder } from '@/src/hooks/useOrder';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { ColorScheme, Radius, Spacing } from '@/src/theme';
-import { estimateOrderTotal } from '@/src/utils/estimateOrderTotal';
 
 interface InfoRowProps {
   icon: ComponentProps<typeof Ionicons>['name'];
@@ -81,7 +71,7 @@ export default function OrderDetailsScreen() {
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
-  const order = getOrderById(orderId);
+  const { order, loading, error, reload } = useOrder(orderId);
   const [isHelpVisible, setIsHelpVisible] = useState(false);
 
   const handleTrackOrder = () => {
@@ -93,6 +83,22 @@ export default function OrderDetailsScreen() {
     } as unknown as Href);
   };
 
+  if (isSupabaseDataSource && loading) {
+    return (
+      <AppScreen title={t('orderDetails')}>
+        <LoadingState message={t('loadingOrders')} />
+      </AppScreen>
+    );
+  }
+
+  if (isSupabaseDataSource && error) {
+    return (
+      <AppScreen title={t('orderDetails')}>
+        <ErrorState message={t('unableToLoadOrders')} retryLabel={t('retry')} onRetry={reload} />
+      </AppScreen>
+    );
+  }
+
   if (!order) {
     return (
       <AppScreen title={t('orderDetails')}>
@@ -103,22 +109,12 @@ export default function OrderDetailsScreen() {
     );
   }
 
-  const laundry = laundries.find((item) => item.id === order.laundryId);
-  const address = addresses.find((item) => item.id === order.addressId);
-  const size = sizeOptions.find((item) => item.id === order.sizeId);
-  const date = dateOptions.find((item) => item.id === order.dateId);
-  const time = timeOptions.find((item) => item.id === order.timeId);
-
-  const selectedServiceIds = order.serviceIds.split(',').filter(Boolean);
-  const selectedServices = services.filter((service) => selectedServiceIds.includes(service.id));
-
   const timelineSteps = orderSteps.map((step) => ({ id: step.id, label: t(step.labelKey) }));
-  const statusLabel = t(getOrderStatusLabelKey(order.status, order.currentStepId));
-  const { laundryFee, pickupFee, returnDeliveryFee, discountAmount, total } = estimateOrderTotal(
-    selectedServices,
-    promotions[0]
-  );
-  const promotion = promotions[0];
+  const statusLabel = t(getOrderStatusLabelKey(order.status, order.stepId));
+  // Real orders never apply a discount (see create_order() in
+  // 004_order_creation_and_status.sql), so this is always 0 there — no
+  // percent-lookup needed beyond what's already on the order itself.
+  const discountPercent = order.subtotal > 0 ? Math.round((order.discount / order.subtotal) * 100) : 0;
 
   return (
     <AppScreen
@@ -153,51 +149,23 @@ export default function OrderDetailsScreen() {
       <View style={styles.section}>
         <SectionHeader title="Laundry" />
         <Card variant="outlined">
-          <InfoRow
-            icon="storefront-outline"
-            label="Laundry"
-            value={laundry?.name ?? 'Not selected'}
-            colors={colors}
-            styles={styles}
-          />
-          {laundry ? (
-            <>
-              <InfoRow
-                icon="star"
-                label="Rating"
-                value={`${laundry.rating.toFixed(1)} • ${laundry.distanceKm.toFixed(1)} km away`}
-                colors={colors}
-                styles={styles}
-              />
-              <InfoRow
-                icon="time-outline"
-                label="Availability"
-                value={laundry.isOpen ? 'Open now' : 'Closed'}
-                subValue={`${laundry.etaMinutes} min estimated turnaround`}
-                colors={colors}
-                styles={styles}
-              />
-            </>
-          ) : null}
+          <InfoRow icon="storefront-outline" label="Laundry" value={order.laundryName} colors={colors} styles={styles} />
         </Card>
       </View>
 
       <View style={styles.section}>
         <SectionHeader title="Services" />
         <Card variant="outlined" padding="none">
-          {selectedServices.length === 0 ? (
+          {order.items.length === 0 ? (
             <Text style={styles.emptyText}>No services were selected.</Text>
           ) : (
-            selectedServices.map((service, index) => (
+            order.items.map((item, index) => (
               <View
-                key={service.id}
-                style={[
-                  styles.serviceRow,
-                  index < selectedServices.length - 1 && styles.serviceRowDivider,
-                ]}
+                key={item.id}
+                style={[styles.serviceRow, index < order.items.length - 1 && styles.serviceRowDivider]}
               >
-                <Text style={styles.serviceLabel}>{service.title}</Text>
-                <Text style={styles.serviceValue}>${service.price.toFixed(2)}</Text>
+                <Text style={styles.serviceLabel}>{item.serviceName}</Text>
+                <Text style={styles.serviceValue}>${item.lineTotal.toFixed(2)}</Text>
               </View>
             ))
           )}
@@ -210,24 +178,26 @@ export default function OrderDetailsScreen() {
           <InfoRow
             icon="location-outline"
             label="Pickup Address"
-            value={address?.label ?? 'Not selected'}
-            subValue={address?.detail}
+            value={order.addressLabel}
+            subValue={order.addressLine}
             colors={colors}
             styles={styles}
           />
-          <InfoRow
-            icon="cube-outline"
-            label="Size Estimate"
-            value={size?.label ?? 'Not selected'}
-            subValue={size?.detail}
-            colors={colors}
-            styles={styles}
-          />
+          {order.sizeLabel ? (
+            <InfoRow
+              icon="cube-outline"
+              label="Size Estimate"
+              value={order.sizeLabel}
+              subValue={order.sizeDetail}
+              colors={colors}
+              styles={styles}
+            />
+          ) : null}
           <InfoRow
             icon="calendar-outline"
             label="Pickup Time"
-            value={date && time ? `${date.label}, ${time.label}` : 'Not selected'}
-            subValue={time?.detail}
+            value={order.scheduledLabel ?? 'Not selected'}
+            subValue={order.scheduledDetail}
             colors={colors}
             styles={styles}
           />
@@ -237,26 +207,26 @@ export default function OrderDetailsScreen() {
       <View style={styles.section}>
         <SectionHeader title="Timeline" />
         <Card variant="outlined">
-          <OrderTimeline steps={timelineSteps} currentStepId={order.currentStepId} />
+          <OrderTimeline steps={timelineSteps} currentStepId={order.stepId} />
         </Card>
       </View>
 
       <View style={styles.section}>
         <SectionHeader title="Summary" />
         <Card variant="outlined">
-          <PriceRow label="Estimated Laundry Fee" value={`$${laundryFee.toFixed(2)}`} styles={styles} />
-          <PriceRow label="Pickup Fee" value={`$${pickupFee.toFixed(2)}`} styles={styles} />
-          <PriceRow label="Return Delivery Fee" value={`$${returnDeliveryFee.toFixed(2)}`} styles={styles} />
-          {discountAmount > 0 ? (
+          <PriceRow label="Estimated Laundry Fee" value={`$${order.subtotal.toFixed(2)}`} styles={styles} />
+          <PriceRow label="Pickup Fee" value={`$${order.pickupFee.toFixed(2)}`} styles={styles} />
+          <PriceRow label="Return Delivery Fee" value={`$${order.deliveryFee.toFixed(2)}`} styles={styles} />
+          {order.discount > 0 ? (
             <PriceRow
-              label={`Discount (${promotion.discountPercent}%)`}
-              value={`-$${discountAmount.toFixed(2)}`}
+              label={`Discount (${discountPercent}%)`}
+              value={`-$${order.discount.toFixed(2)}`}
               positive
               styles={styles}
             />
           ) : null}
           <View style={styles.totalDivider} />
-          <PriceRow label="Estimated Total" value={`$${total.toFixed(2)}`} emphasis styles={styles} />
+          <PriceRow label="Estimated Total" value={`$${order.total.toFixed(2)}`} emphasis styles={styles} />
         </Card>
       </View>
 

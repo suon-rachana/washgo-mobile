@@ -4,11 +4,13 @@ import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OrderSummaryCard } from '@/src/components/order';
-import { Chip, EmptyState } from '@/src/components/ui';
-import { activeOrders, pastOrders, type OrderSummary } from '@/src/data/mock';
+import { Chip, EmptyState, ErrorState, LoadingState } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
+import { useOrders } from '@/src/hooks/useOrders';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTranslation } from '@/src/i18n';
 import { ColorScheme, Spacing } from '@/src/theme';
+import type { AppOrder } from '@/src/types/order';
 
 type OrdersFilter = 'active' | 'history';
 
@@ -23,17 +25,26 @@ export default function OrdersScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [filter, setFilter] = useState<OrdersFilter>('active');
   const [refreshing, setRefreshing] = useState(false);
+  const { activeOrders, pastOrders, loading, error, reload } = useOrders();
 
-  const visibleOrders: OrderSummary[] = filter === 'active' ? activeOrders : pastOrders;
+  const visibleOrders: AppOrder[] = filter === 'active' ? activeOrders : pastOrders;
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    // No backend yet — mock the refresh gesture so the screen still feels live.
+    if (isSupabaseDataSource) {
+      reload();
+      // useOrders' fetch effect doesn't expose a promise to await here —
+      // give the refresh indicator a moment to reflect the in-flight fetch
+      // rather than flashing off immediately.
+      setTimeout(() => setRefreshing(false), 500);
+      return;
+    }
+    // Mock mode has nothing to re-fetch — mock the gesture so it still feels live.
     setTimeout(() => setRefreshing(false), 800);
-  }, []);
+  }, [reload]);
 
   const handleTrackPress = useCallback(
-    (order: OrderSummary) => {
+    (order: AppOrder) => {
       router.push({
         pathname: '/tracking',
         params: { orderId: order.id },
@@ -43,7 +54,7 @@ export default function OrdersScreen() {
   );
 
   const handleViewDetails = useCallback(
-    (order: OrderSummary) => {
+    (order: AppOrder) => {
       router.push({
         pathname: '/order-details',
         params: { orderId: order.id },
@@ -73,40 +84,46 @@ export default function OrdersScreen() {
         />
       </View>
 
-      <FlatList
-        data={visibleOrders}
-        keyExtractor={(order) => order.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
-        }
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        renderItem={({ item }) => (
-          <OrderSummaryCard
-            order={item}
-            onTrackPress={item.status === 'active' ? () => handleTrackPress(item) : undefined}
-            onViewDetails={() => handleViewDetails(item)}
-          />
-        )}
-        ListEmptyComponent={
-          filter === 'active' ? (
-            <EmptyState
-              icon="receipt-outline"
-              title={t('noActiveOrders')}
-              description={t('noActiveOrdersDescription')}
-              actionLabel={t('bookLaundry')}
-              onActionPress={handleBookLaundry}
+      {loading && visibleOrders.length === 0 ? (
+        <LoadingState message={t('loadingOrders')} />
+      ) : error && visibleOrders.length === 0 ? (
+        <ErrorState message={t('unableToLoadOrders')} retryLabel={t('retry')} onRetry={reload} />
+      ) : (
+        <FlatList
+          data={visibleOrders}
+          keyExtractor={(order) => order.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+          }
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          renderItem={({ item }) => (
+            <OrderSummaryCard
+              order={item}
+              onTrackPress={item.status === 'active' ? () => handleTrackPress(item) : undefined}
+              onViewDetails={() => handleViewDetails(item)}
             />
-          ) : (
-            <EmptyState
-              icon="time-outline"
-              title={t('noOrderHistory')}
-              description={t('noOrderHistoryDescription')}
-            />
-          )
-        }
-      />
+          )}
+          ListEmptyComponent={
+            filter === 'active' ? (
+              <EmptyState
+                icon="receipt-outline"
+                title={t('noActiveOrders')}
+                description={t('noActiveOrdersDescription')}
+                actionLabel={t('bookLaundry')}
+                onActionPress={handleBookLaundry}
+              />
+            ) : (
+              <EmptyState
+                icon="time-outline"
+                title={t('noOrderHistory')}
+                description={t('noOrderHistoryDescription')}
+              />
+            )
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }

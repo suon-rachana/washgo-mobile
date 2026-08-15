@@ -7,16 +7,47 @@ import { CharacterCounter, SectionHeader } from '@/src/components/common';
 import { FavoriteHeaderButton } from '@/src/components/laundry';
 import { AppScreen } from '@/src/components/layout';
 import { ServiceCard, ServiceSummary } from '@/src/components/services';
-import { Button, EmptyState, Input } from '@/src/components/ui';
-import { laundries, services } from '@/src/data/mock';
+import { Button, EmptyState, ErrorState, Input, LoadingState } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
+import { laundries, services as mockCatalogServices } from '@/src/data/mock';
+import { useLaundry } from '@/src/hooks/useLaundry';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
-import { ColorScheme, Spacing } from '@/src/theme';
-import type { Service } from '@/src/types/service';
+import { Colors, ColorScheme, Spacing } from '@/src/theme';
+import type { LaundryService, LaundryServicePricingUnit } from '@/src/types/laundry';
+import type { Service, ServicePriceType } from '@/src/types/service';
 import { matchesSearch } from '@/src/utils/search';
 
 const INSTRUCTIONS_MAX_LENGTH = 200;
+
+const PRICING_UNIT_TO_PRICE_TYPE: Record<LaundryServicePricingUnit, ServicePriceType> = {
+  per_kg: 'kg',
+  per_item: 'item',
+  flat: 'fixed',
+};
+
+const PRICING_UNIT_DESCRIPTION: Record<LaundryServicePricingUnit, string> = {
+  per_kg: 'Priced per kilogram of laundry.',
+  per_item: 'Priced per item.',
+  flat: 'One flat rate for this service.',
+};
+
+// Real laundry_services rows are simpler than the mock Service catalog (no
+// icon/badge/coming-soon concept yet) — mapped here so ServiceCard/
+// ServiceSummary can render either source without a second set of components.
+function mapLaundryServiceToService(laundryService: LaundryService): Service {
+  const pricingUnit = laundryService.pricingUnit ?? 'per_item';
+  return {
+    id: laundryService.id,
+    title: laundryService.label,
+    description: laundryService.description || PRICING_UNIT_DESCRIPTION[pricingUnit],
+    icon: 'shirt-outline',
+    price: laundryService.price,
+    priceType: PRICING_UNIT_TO_PRICE_TYPE[pricingUnit],
+    color: Colors.primary,
+  };
+}
 
 export default function ChooseServicesScreen() {
   const router = useRouter();
@@ -25,22 +56,36 @@ export default function ChooseServicesScreen() {
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { laundryId } = useLocalSearchParams<{ laundryId?: string }>();
-  const laundry = laundries.find((item) => item.id === laundryId);
+
+  // Mock mode: laundry.services carries this laundry's own price list but
+  // the mock catalog screen has always shown the full generic catalog
+  // instead (see the git history) — left unchanged here to avoid altering
+  // established mock-mode behavior. Supabase mode fixes this for real: the
+  // whole point of laundry_services is that each shop has its own list.
+  const mockLaundry = laundries.find((item) => item.id === laundryId);
+  const { laundry: supabaseLaundry, loading, error, reload } = useLaundry(isSupabaseDataSource ? laundryId : undefined);
+  const laundry = isSupabaseDataSource ? supabaseLaundry : mockLaundry;
+
+  const catalogServices = useMemo<Service[]>(
+    () => (isSupabaseDataSource ? (supabaseLaundry?.services ?? []).map(mapLaundryServiceToService) : mockCatalogServices),
+    [supabaseLaundry]
+  );
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [instructions, setInstructions] = useState('');
 
   const filteredServices = useMemo(
     () =>
-      services.filter((service) =>
+      catalogServices.filter((service) =>
         matchesSearch(searchQuery, [service.title, service.description, service.badge])
       ),
-    [searchQuery]
+    [catalogServices, searchQuery]
   );
 
   const selectedServices = useMemo(
-    () => services.filter((service) => selectedIds.includes(service.id)),
-    [selectedIds]
+    () => catalogServices.filter((service) => selectedIds.includes(service.id)),
+    [catalogServices, selectedIds]
   );
 
   const handleToggle = (service: Service) => {
@@ -67,6 +112,37 @@ export default function ChooseServicesScreen() {
       },
     } as unknown as Href);
   };
+
+  // Supabase mode needs a specific laundry to know which services to show —
+  // unlike mock mode there's no generic catalog fallback (see the comment
+  // above catalogServices).
+  if (isSupabaseDataSource && !laundryId) {
+    return (
+      <AppScreen title={t('chooseServices')}>
+        <EmptyState
+          icon="storefront-outline"
+          title="No laundry selected"
+          description="Go back and choose a laundry first."
+        />
+      </AppScreen>
+    );
+  }
+
+  if (isSupabaseDataSource && loading) {
+    return (
+      <AppScreen title={t('chooseServices')}>
+        <LoadingState message={t('loadingLaundries')} />
+      </AppScreen>
+    );
+  }
+
+  if (isSupabaseDataSource && error) {
+    return (
+      <AppScreen title={t('chooseServices')}>
+        <ErrorState message={t('unableToLoadLaundries')} retryLabel={t('retry')} onRetry={reload} />
+      </AppScreen>
+    );
+  }
 
   return (
     <AppScreen

@@ -5,12 +5,15 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CharacterCounter, SelectableOption } from '@/src/components/common';
 import { AppScreen } from '@/src/components/layout';
-import { Button, Input } from '@/src/components/ui';
-import { addresses, dateOptions, mapLocationAddress, sizeOptions, timeOptions } from '@/src/data/mock';
+import { Button, ErrorState, Input, LoadingState } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
+import { addresses as mockAddresses, dateOptions, mapLocationAddress, sizeOptions, timeOptions } from '@/src/data/mock';
+import { useAddresses } from '@/src/hooks/useAddresses';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { ColorScheme, Radius, Spacing } from '@/src/theme';
+import { fromMockAddress, type DisplayAddress } from '@/src/types/address';
 import { formatCoordinates, parseLatitudeParam, parseLongitudeParam } from '@/src/utils/coordinates';
 
 const NOTES_MAX_LENGTH = 150;
@@ -41,18 +44,38 @@ export default function PickupBookingScreen() {
       : null;
   }, [latitude, longitude]);
 
+  // Supabase mode: real saved addresses instead of the mock catalog, so a
+  // real order can carry a real address_line/lat/lng snapshot.
+  const {
+    addresses: realAddresses,
+    loading: addressesLoading,
+    error: addressesError,
+    reload: reloadAddresses,
+  } = useAddresses();
+  const savedAddressOptions: DisplayAddress[] = isSupabaseDataSource
+    ? realAddresses
+    : mockAddresses.map(fromMockAddress);
+
   // The map-picked location is only added to this screen's own displayed
-  // options when the user actually returns from /map with a selection — the
-  // shared `addresses` mock list itself is never mutated. `mapLocationAddress`
+  // options when the user actually returns from /map with a selection —
+  // the saved-address list itself is never mutated. `mapLocationAddress`
   // remains the fallback display information; when valid coordinates came
   // back from /map, they're appended beneath its address line.
-  const addressOptions = useMemo(() => {
-    if (!isMapLocationSelected) return addresses;
-    const mapAddress = selectedCoordinates
-      ? { ...mapLocationAddress, detail: `${mapLocationAddress.detail}\n${formatCoordinates(selectedCoordinates)}` }
-      : mapLocationAddress;
-    return [mapAddress, ...addresses];
-  }, [isMapLocationSelected, selectedCoordinates]);
+  const addressOptions = useMemo<DisplayAddress[]>(() => {
+    if (!isMapLocationSelected) return savedAddressOptions;
+    const mapAddress: DisplayAddress = {
+      id: mapLocationAddress.id,
+      label: mapLocationAddress.label,
+      detail: selectedCoordinates
+        ? `${mapLocationAddress.detail}\n${formatCoordinates(selectedCoordinates)}`
+        : mapLocationAddress.detail,
+      isDefault: false,
+      icon: mapLocationAddress.icon,
+      latitude: selectedCoordinates?.latitude ?? null,
+      longitude: selectedCoordinates?.longitude ?? null,
+    };
+    return [mapAddress, ...savedAddressOptions];
+  }, [isMapLocationSelected, savedAddressOptions, selectedCoordinates]);
 
   const [addressId, setAddressId] = useState<string | null>(() =>
     isMapLocationSelected ? mapLocationAddress.id : null
@@ -63,6 +86,7 @@ export default function PickupBookingScreen() {
   const [notes, setNotes] = useState('');
 
   const isComplete = !!addressId && !!sizeId && !!dateId && !!timeId;
+  const selectedAddress = addressOptions.find((address) => address.id === addressId);
 
   const handleContinue = () => {
     // `/summary` is an index route; see the Href-cast note in app/(tabs)/home.tsx —
@@ -73,9 +97,22 @@ export default function PickupBookingScreen() {
         ...(laundryId ? { laundryId } : {}),
         ...(serviceIds ? { serviceIds } : {}),
         addressId: addressId ?? '',
+        // Full resolved address snapshot, threaded through to /payment where
+        // the real order is created — avoids re-resolving a synthetic
+        // map-pick "address" (which isn't in any saved-address list) by id
+        // a second time downstream.
+        ...(selectedAddress
+          ? {
+              addressLabel: selectedAddress.label,
+              addressLine: selectedAddress.detail,
+              ...(selectedAddress.latitude != null ? { addressLatitude: String(selectedAddress.latitude) } : {}),
+              ...(selectedAddress.longitude != null ? { addressLongitude: String(selectedAddress.longitude) } : {}),
+            }
+          : {}),
         sizeId: sizeId ?? '',
         dateId: dateId ?? '',
         timeId: timeId ?? '',
+        notes,
       },
     } as unknown as Href);
   };
@@ -108,29 +145,37 @@ export default function PickupBookingScreen() {
     >
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Pickup Address</Text>
-        <View style={styles.optionList}>
-          {addressOptions.map((address) => (
-            <SelectableOption
-              key={address.id}
-              title={address.label}
-              detail={address.detail}
-              icon={address.icon}
-              selected={addressId === address.id}
-              onPress={() => setAddressId(address.id)}
-              accessibilityLabel={`Select pickup address ${address.label}`}
-            />
-          ))}
-          <Pressable
-            onPress={() => console.log('Add new address pressed')}
-            accessibilityRole="button"
-            accessibilityLabel="Add new address"
-            accessibilityHint="Opens a form to save a new pickup address"
-            style={({ pressed }) => [styles.addAddress, pressed && styles.addAddressPressed]}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
-            <Text style={styles.addAddressText}>Add New Address</Text>
-          </Pressable>
-        </View>
+        {isSupabaseDataSource && addressesLoading ? (
+          <LoadingState message={t('loadingAccount')} />
+        ) : isSupabaseDataSource && addressesError ? (
+          <ErrorState message={t('unableToLoadAddresses')} retryLabel={t('retry')} onRetry={reloadAddresses} />
+        ) : (
+          <View style={styles.optionList}>
+            {addressOptions.map((address) => (
+              <SelectableOption
+                key={address.id}
+                title={address.label}
+                detail={address.detail}
+                icon={address.icon}
+                selected={addressId === address.id}
+                onPress={() => setAddressId(address.id)}
+                accessibilityLabel={`Select pickup address ${address.label}`}
+              />
+            ))}
+            <Pressable
+              onPress={() =>
+                isSupabaseDataSource ? router.push('/addresses/add') : console.log('Add new address pressed')
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Add new address"
+              accessibilityHint="Opens a form to save a new pickup address"
+              style={({ pressed }) => [styles.addAddress, pressed && styles.addAddressPressed]}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+              <Text style={styles.addAddressText}>Add New Address</Text>
+            </Pressable>
+          </View>
+        )}
 
         <Button
           title={t('chooseOnMap')}

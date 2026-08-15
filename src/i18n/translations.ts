@@ -201,7 +201,10 @@ export type TranslationKey =
   // Phase 3 — favorites & notifications backed by Supabase
   | "loadingNotifications"
   | "unableToLoadNotifications"
-  | "unableToLoadFavorites";
+  | "unableToLoadFavorites"
+  // Phase 4 — orders backed by Supabase
+  | "loadingOrders"
+  | "unableToLoadOrders";
 
 export type TranslationParams = Record<string, string | number>;
 
@@ -439,6 +442,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     loadingNotifications: "Loading notifications…",
     unableToLoadNotifications: "Unable to load notifications.",
     unableToLoadFavorites: "Unable to load favorites.",
+
+    loadingOrders: "Loading orders…",
+    unableToLoadOrders: "Unable to load orders.",
   },
   km: {
     home: "ទំព័រដើម",
@@ -651,5 +657,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     loadingNotifications: "កំពុងផ្ទុកការជូនដំណឹង…",
     unableToLoadNotifications: "មិនអាចផ្ទុកការជូនដំណឹងបានទេ។",
     unableToLoadFavorites: "មិនអាចផ្ទុកចំណូលចិត្តបានទេ។",
+
+    loadingOrders: "កំពុងផ្ទុកការកម្ម៉ង់…",
+    unableToLoadOrders: "មិនអាចផ្ទុកការកម្ម៉ង់បានទេ។",
   },
 };

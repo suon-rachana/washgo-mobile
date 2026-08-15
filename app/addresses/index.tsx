@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState, type ComponentProps } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState } from '@/src/components/ui';
 import { isSupabaseDataSource } from '@/src/config/dataSource';
-import { addresses as mockAddresses, type Address as MockAddress } from '@/src/data/mock';
+import { addresses as mockAddresses } from '@/src/data/mock';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation, type TranslationKey } from '@/src/i18n';
@@ -14,31 +14,7 @@ import { AppScreen } from '@/src/components/layout';
 import { addressService } from '@/src/services/addressService';
 import type { ServiceErrorCode } from '@/src/services/errors';
 import { ColorScheme, Radius, Spacing } from '@/src/theme';
-import type { AddressRow } from '@/src/types/database';
-
-type IconName = ComponentProps<typeof Ionicons>['name'];
-
-interface DisplayAddress {
-  id: string;
-  label: string;
-  detail: string;
-  isDefault: boolean;
-  icon: IconName;
-}
-
-function fromMockAddress(address: MockAddress): DisplayAddress {
-  return { id: address.id, label: address.label, detail: address.detail, isDefault: !!address.isDefault, icon: address.icon };
-}
-
-function fromSupabaseAddress(address: AddressRow): DisplayAddress {
-  return {
-    id: address.id,
-    label: address.label,
-    detail: address.address_line,
-    isDefault: address.is_default,
-    icon: 'location-outline',
-  };
-}
+import { fromMockAddress, fromSupabaseAddress, type DisplayAddress } from '@/src/types/address';
 
 interface AddressCardProps {
   address: DisplayAddress;

@@ -2,10 +2,19 @@
 // (src/data/mock/laundries.ts) and the Supabase-backed service
 // (src/services/laundryService.ts) — screens and components render this one
 // shape regardless of which data source is active.
+export type LaundryServicePricingUnit = 'per_kg' | 'per_item' | 'flat';
+
 export interface LaundryService {
   id: string;
   label: string;
   price: number;
+  /**
+   * Only populated for Supabase-backed laundries — the mock catalog has no
+   * equivalent field. Used to select real services in app/services/index.tsx
+   * (Phase 4) and to render a proper per-unit price there.
+   */
+  pricingUnit?: LaundryServicePricingUnit;
+  description?: string;
 }
 
 export interface LaundryReview {

@@ -55,6 +55,8 @@ function mapLaundryRow(row: LaundryRow, services: LaundryServiceRow[]): Laundry 
       id: service.id,
       label: service.name,
       price: service.price,
+      pricingUnit: service.pricing_unit,
+      description: service.description ?? undefined,
     })),
     // No reviews table yet — Phase 2 covers laundries + services only. The
     // laundry detail screen shows an empty state instead of a broken list.

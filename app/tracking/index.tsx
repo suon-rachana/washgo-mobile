@@ -5,23 +5,14 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SectionHeader } from '@/src/components/common';
 import { AppScreen } from '@/src/components/layout';
 import { OrderTimeline, RiderCard } from '@/src/components/order';
-import { Badge, Button, Card, Chip } from '@/src/components/ui';
-import {
-  activeOrders,
-  addresses,
-  getOrderById,
-  getOrderStatusLabelKey,
-  laundries,
-  mockRider,
-  orderSteps,
-  promotions,
-  services,
-} from '@/src/data/mock';
+import { Badge, Button, Card, Chip, ErrorState, LoadingState } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
+import { getOrderStatusLabelKey, mockRider, orderSteps } from '@/src/data/mock';
+import { useOrder } from '@/src/hooks/useOrder';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { ColorScheme, Spacing } from '@/src/theme';
-import { estimateOrderTotal } from '@/src/utils/estimateOrderTotal';
 import { resetToHome } from '@/src/utils/resetToTab';
 
 export default function OrderTrackingScreen() {
@@ -31,9 +22,7 @@ export default function OrderTrackingScreen() {
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
-  // Falls back to the first active mock order when no orderId is passed, so the
-  // booking flow (which doesn't always thread an id through yet) still has something to show.
-  const order = getOrderById(orderId) ?? activeOrders[0];
+  const { order, loading, error, reload, advanceStatus, isAdvancing } = useOrder(orderId);
 
   const handleBackToHome = () => {
     // Ends the booking flow — clears the entire pushed stack (Laundry
@@ -41,6 +30,22 @@ export default function OrderTrackingScreen() {
     // See src/utils/resetToTab.ts for why a plain replace() isn't enough.
     resetToHome();
   };
+
+  if (isSupabaseDataSource && loading) {
+    return (
+      <AppScreen title={t('trackOrder')}>
+        <LoadingState message={t('loadingOrders')} />
+      </AppScreen>
+    );
+  }
+
+  if (isSupabaseDataSource && error) {
+    return (
+      <AppScreen title={t('trackOrder')}>
+        <ErrorState message={t('unableToLoadOrders')} retryLabel={t('retry')} onRetry={reload} />
+      </AppScreen>
+    );
+  }
 
   if (!order) {
     return (
@@ -52,15 +57,8 @@ export default function OrderTrackingScreen() {
     );
   }
 
-  const laundry = laundries.find((item) => item.id === order.laundryId);
-  const address = addresses.find((item) => item.id === order.addressId);
-
-  const selectedServiceIds = order.serviceIds.split(',').filter(Boolean);
-  const selectedServices = services.filter((service) => selectedServiceIds.includes(service.id));
-
   const timelineSteps = orderSteps.map((step) => ({ id: step.id, label: t(step.labelKey) }));
-  const statusLabel = t(getOrderStatusLabelKey(order.status, order.currentStepId));
-  const { total: estimatedTotal } = estimateOrderTotal(selectedServices, promotions[0]);
+  const statusLabel = t(getOrderStatusLabelKey(order.status, order.stepId));
 
   const handleViewFullDetails = () => {
     // `/order-details` is an index route; see the Href-cast note in app/(tabs)/home.tsx —
@@ -71,11 +69,24 @@ export default function OrderTrackingScreen() {
     } as unknown as Href);
   };
 
+  const canAdvance = isSupabaseDataSource && order.status === 'active' && order.stepId !== 'delivered';
+
   return (
     <AppScreen
       title={t('trackOrder')}
       footer={
         <>
+          {canAdvance ? (
+            <Button
+              title="Simulate Next Update (Demo)"
+              variant="outline"
+              fullWidth
+              loading={isAdvancing}
+              disabled={isAdvancing}
+              onPress={advanceStatus}
+              accessibilityHint="Advances this order to its next status — stands in for a rider/shop app that doesn't exist yet"
+            />
+          ) : null}
           <Button
             title={t('viewDetails')}
             fullWidth
@@ -99,49 +110,54 @@ export default function OrderTrackingScreen() {
             <Text style={styles.orderId}>{order.id}</Text>
             <Badge label={statusLabel} variant="primary" />
           </View>
-          <Text style={styles.shopName}>{laundry?.name ?? 'Unknown laundry'}</Text>
+          <Text style={styles.shopName}>{order.laundryName}</Text>
         </Card>
       </View>
 
       <View style={styles.section}>
         <SectionHeader title="Order Timeline" />
         <Card variant="outlined">
-          <OrderTimeline steps={timelineSteps} currentStepId={order.currentStepId} />
+          <OrderTimeline steps={timelineSteps} currentStepId={order.stepId} />
         </Card>
       </View>
 
-      <View style={styles.section}>
-        <SectionHeader title="Your Rider" />
-        <RiderCard
-          name={mockRider.name}
-          rating={mockRider.rating}
-          vehicle={mockRider.vehicle}
-          plate={mockRider.plate}
-          onCall={() => console.log('Call rider pressed')}
-          onMessage={() => console.log('Message rider pressed')}
-        />
-      </View>
+      {!isSupabaseDataSource ? (
+        // No real rider system exists yet (no rider app assigns
+        // pickup_rider_id/delivery_rider_id) — shown for mock orders only
+        // rather than presenting fabricated rider data as real.
+        <View style={styles.section}>
+          <SectionHeader title="Your Rider" />
+          <RiderCard
+            name={mockRider.name}
+            rating={mockRider.rating}
+            vehicle={mockRider.vehicle}
+            plate={mockRider.plate}
+            onCall={() => console.log('Call rider pressed')}
+            onMessage={() => console.log('Message rider pressed')}
+          />
+        </View>
+      ) : null}
 
       <View style={[styles.section, styles.lastSection]}>
         <SectionHeader title="Order Summary" />
         <Card variant="outlined">
           <Text style={styles.previewLabel}>Selected Services</Text>
           <View style={styles.servicesRow}>
-            {selectedServices.length === 0 ? (
+            {order.items.length === 0 ? (
               <Text style={styles.previewValue}>No services selected</Text>
             ) : (
-              selectedServices.map((service) => <Chip key={service.id} label={service.title} />)
+              order.items.map((item) => <Chip key={item.id} label={item.serviceName} />)
             )}
           </View>
 
           <View style={styles.previewRow}>
             <Text style={styles.previewLabel}>Pickup Address</Text>
-            <Text style={styles.previewValue}>{address?.label ?? 'Not selected'}</Text>
+            <Text style={styles.previewValue}>{order.addressLabel}</Text>
           </View>
 
           <View style={[styles.previewRow, styles.previewRowLast]}>
             <Text style={styles.previewLabelEmphasis}>Estimated Total</Text>
-            <Text style={styles.previewValueEmphasis}>${estimatedTotal.toFixed(2)}</Text>
+            <Text style={styles.previewValueEmphasis}>${order.total.toFixed(2)}</Text>
           </View>
         </Card>
       </View>

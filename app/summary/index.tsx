@@ -5,17 +5,19 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { SectionHeader } from '@/src/components/common';
 import { AppScreen } from '@/src/components/layout';
-import { Button, Card } from '@/src/components/ui';
+import { Button, Card, ErrorState, LoadingState } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
 import {
-  addresses,
+  addresses as mockAddresses,
   dateOptions,
-  laundries,
+  laundries as mockLaundries,
   mockOrders,
   promotions,
-  services,
+  services as mockServices,
   sizeOptions,
   timeOptions,
 } from '@/src/data/mock';
+import { useLaundry } from '@/src/hooks/useLaundry';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
@@ -77,25 +79,70 @@ export default function OrderSummaryScreen() {
   const typography = useTypography();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
-  const { laundryId, serviceIds, addressId, sizeId, dateId, timeId } = useLocalSearchParams<{
+  const {
+    laundryId,
+    serviceIds,
+    addressId,
+    addressLabel,
+    addressLine,
+    addressLatitude,
+    addressLongitude,
+    sizeId,
+    dateId,
+    timeId,
+    notes,
+  } = useLocalSearchParams<{
     laundryId?: string;
     serviceIds?: string;
     addressId?: string;
+    addressLabel?: string;
+    addressLine?: string;
+    addressLatitude?: string;
+    addressLongitude?: string;
     sizeId?: string;
     dateId?: string;
     timeId?: string;
+    notes?: string;
   }>();
 
-  const laundry = laundries.find((item) => item.id === laundryId);
-  const address = addresses.find((item) => item.id === addressId);
+  const {
+    laundry: supabaseLaundry,
+    loading: laundryLoading,
+    error: laundryError,
+    reload: reloadLaundry,
+  } = useLaundry(isSupabaseDataSource ? laundryId : undefined);
+
+  const laundry = isSupabaseDataSource ? supabaseLaundry : mockLaundries.find((item) => item.id === laundryId);
+  const address = isSupabaseDataSource
+    ? addressId
+      ? { label: addressLabel || 'Not selected', detail: addressLine ?? '' }
+      : undefined
+    : mockAddresses.find((item) => item.id === addressId);
   const size = sizeOptions.find((item) => item.id === sizeId);
   const date = dateOptions.find((item) => item.id === dateId);
   const time = timeOptions.find((item) => item.id === timeId);
 
   const selectedServiceIds = serviceIds ? serviceIds.split(',').filter(Boolean) : [];
-  const selectedServices = services.filter((service) => selectedServiceIds.includes(service.id));
+  // Real laundry_services rows and the mock Service catalog both expose a
+  // `price` field, which is all estimateOrderTotal() needs — no mapping
+  // required between the two shapes here.
+  const selectedServices = isSupabaseDataSource
+    ? (supabaseLaundry?.services ?? []).filter((service) => selectedServiceIds.includes(service.id))
+    : mockServices.filter((service) => selectedServiceIds.includes(service.id));
 
-  const promotion = promotions[0];
+  // Normalized display shape — LaundryService uses `label`, the mock Service
+  // catalog uses `title`; everything downstream in this screen only needs id/name/price.
+  const displayServices = selectedServices.map((service) => ({
+    id: service.id,
+    name: 'label' in service ? service.label : service.title,
+    price: service.price,
+  }));
+
+  // Real orders never apply a discount yet — there's no promotions table
+  // (see create_order() in 004_order_creation_and_status.sql) — so this
+  // preview only shows the promo banner in mock mode, where it's honest
+  // about what actually gets created.
+  const promotion = isSupabaseDataSource ? undefined : promotions[0];
   const { laundryFee, pickupFee, returnDeliveryFee, discountAmount, total: estimatedTotal } = estimateOrderTotal(
     selectedServices,
     promotion
@@ -104,15 +151,49 @@ export default function OrderSummaryScreen() {
   const activeOrder = mockOrders.find((order) => order.status === 'active');
 
   const handleConfirmPickup = () => {
-    if (!activeOrder) return;
+    if (isSupabaseDataSource) {
+      // `/payment` is an index route; see the Href-cast note in app/(tabs)/home.tsx —
+      // the local typed-routes generator doesn't collapse index files to their parent path.
+      router.push({
+        pathname: '/payment',
+        params: {
+          ...(laundryId ? { laundryId } : {}),
+          ...(serviceIds ? { serviceIds } : {}),
+          ...(addressId ? { addressId } : {}),
+          ...(addressLabel ? { addressLabel } : {}),
+          ...(addressLine ? { addressLine } : {}),
+          ...(addressLatitude ? { addressLatitude } : {}),
+          ...(addressLongitude ? { addressLongitude } : {}),
+          ...(dateId ? { dateId } : {}),
+          ...(timeId ? { timeId } : {}),
+          ...(notes ? { notes } : {}),
+        },
+      } as unknown as Href);
+      return;
+    }
 
-    // `/payment` is an index route; see the Href-cast note in app/(tabs)/home.tsx —
-    // the local typed-routes generator doesn't collapse index files to their parent path.
+    if (!activeOrder) return;
     router.push({
       pathname: '/payment',
       params: { orderId: activeOrder.id },
     } as unknown as Href);
   };
+
+  if (isSupabaseDataSource && laundryLoading) {
+    return (
+      <AppScreen title={t('orderSummary')}>
+        <LoadingState message={t('loadingLaundries')} />
+      </AppScreen>
+    );
+  }
+
+  if (isSupabaseDataSource && laundryError) {
+    return (
+      <AppScreen title={t('orderSummary')}>
+        <ErrorState message={t('unableToLoadLaundries')} retryLabel={t('retry')} onRetry={reloadLaundry} />
+      </AppScreen>
+    );
+  }
 
   return (
     <AppScreen
@@ -167,18 +248,18 @@ export default function OrderSummaryScreen() {
         <View style={styles.section}>
           <SectionHeader title="Selected Services" />
           <Card variant="outlined" padding="none">
-            {selectedServices.length === 0 ? (
+            {displayServices.length === 0 ? (
               <Text style={styles.emptyServicesText}>No services selected.</Text>
             ) : (
-              selectedServices.map((service, index) => (
+              displayServices.map((service, index) => (
                 <View
                   key={service.id}
                   style={[
                     styles.serviceRow,
-                    index < selectedServices.length - 1 && styles.serviceRowDivider,
+                    index < displayServices.length - 1 && styles.serviceRowDivider,
                   ]}
                 >
-                  <Text style={styles.serviceLabel}>{service.title}</Text>
+                  <Text style={styles.serviceLabel}>{service.name}</Text>
                   <Text style={styles.serviceValue}>${service.price.toFixed(2)}</Text>
                 </View>
               ))
@@ -192,7 +273,7 @@ export default function OrderSummaryScreen() {
             <PriceRow label="Estimated Laundry Fee" value={`$${laundryFee.toFixed(2)}`} styles={styles} />
             <PriceRow label="Pickup Fee" value={`$${pickupFee.toFixed(2)}`} styles={styles} />
             <PriceRow label="Return Delivery Fee" value={`$${returnDeliveryFee.toFixed(2)}`} styles={styles} />
-            {discountAmount > 0 ? (
+            {discountAmount > 0 && promotion ? (
               <PriceRow
                 label={`Discount (${promotion.discountPercent}%)`}
                 value={`-$${discountAmount.toFixed(2)}`}
