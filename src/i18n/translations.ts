@@ -197,7 +197,38 @@ export type TranslationKey =
   | "loadingLaundries"
   | "unableToLoadLaundries"
   | "noReviewsYet"
-  | "noReviewsYetDescription";
+  | "noReviewsYetDescription"
+  // Phase 3 — favorites & notifications backed by Supabase
+  | "loadingNotifications"
+  | "unableToLoadNotifications"
+  | "unableToLoadFavorites";
+
+export type TranslationParams = Record<string, string | number>;
+
+// Pure resolver shared by useTranslation()'s `t` (reactive, inside React) and
+// any code that needs a translated string outside a component — e.g. the
+// notifications store resolving mock notification copy imperatively. Keep
+// this the single source of truth for interpolation/normalization so the
+// two never drift.
+export function resolveTranslation(language: Language, key: TranslationKey, params?: TranslationParams): string {
+  const template = translations[language][key];
+  const resolved = !params
+    ? template
+    : // `{{paramName}}` interpolation — the only convention notification
+      // messages (and any future parameterized copy) need to support.
+      Object.entries(params).reduce(
+        (result, [paramKey, value]) => result.replace(new RegExp(`{{${paramKey}}}`, 'g'), String(value)),
+        template
+      );
+  // Defensive normalization: Khmer relies on combining vowel/sign marks, and
+  // copy-pasting translations from docs/spreadsheets can silently introduce
+  // NFD (decomposed) or mixed-normalization sequences that read identically
+  // but fail to shape correctly on-device. Normalizing every resolved string
+  // to NFC costs nothing when the text is already normalized (the common
+  // case) and guards against that whole class of "one word renders as a box"
+  // bugs going forward.
+  return resolved.normalize('NFC');
+}
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -404,6 +435,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     unableToLoadLaundries: "Unable to load laundries.",
     noReviewsYet: "No reviews yet",
     noReviewsYetDescription: "Be the first to review this laundry after your order.",
+
+    loadingNotifications: "Loading notifications…",
+    unableToLoadNotifications: "Unable to load notifications.",
+    unableToLoadFavorites: "Unable to load favorites.",
   },
   km: {
     home: "ទំព័រដើម",
@@ -612,5 +647,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     unableToLoadLaundries: "មិនអាចផ្ទុកហាងបោកគក់បានទេ។",
     noReviewsYet: "មិនទាន់មានការវាយតម្លៃនៅឡើយទេ",
     noReviewsYetDescription: "សូមក្លាយជាអ្នកដំបូងវាយតម្លៃហាងបោកគក់នេះបន្ទាប់ពីការកម្មង់របស់អ្នក។",
+
+    loadingNotifications: "កំពុងផ្ទុកការជូនដំណឹង…",
+    unableToLoadNotifications: "មិនអាចផ្ទុកការជូនដំណឹងបានទេ។",
+    unableToLoadFavorites: "មិនអាចផ្ទុកចំណូលចិត្តបានទេ។",
   },
 };

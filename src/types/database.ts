@@ -295,3 +295,6 @@ export type AddressInsert = Database['public']['Tables']['addresses']['Insert'];
 export type AddressUpdate = Database['public']['Tables']['addresses']['Update'];
 export type LaundryRow = Database['public']['Tables']['laundries']['Row'];
 export type LaundryServiceRow = Database['public']['Tables']['laundry_services']['Row'];
+export type NotificationRow = Database['public']['Tables']['notifications']['Row'];
+export type FavoriteRow = Database['public']['Tables']['favorites']['Row'];
+export type FavoriteInsert = Database['public']['Tables']['favorites']['Insert'];

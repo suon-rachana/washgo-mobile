@@ -5,23 +5,29 @@ import { StyleSheet, View } from 'react-native';
 
 import { LaundryCard } from '@/src/components/laundry';
 import { AppScreen } from '@/src/components/layout';
-import { EmptyState, Input } from '@/src/components/ui';
-import { laundries, type Laundry } from '@/src/data/mock';
+import { EmptyState, ErrorState, Input, LoadingState } from '@/src/components/ui';
+import { useLaundries } from '@/src/hooks/useLaundries';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTranslation } from '@/src/i18n';
 import { useFavoritesStore } from '@/src/store/favorites';
 import { ColorScheme, Spacing } from '@/src/theme';
+import type { Laundry } from '@/src/types/laundry';
 import { matchesSearch } from '@/src/utils/search';
 
 export default function FavoriteLaundriesScreen() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const favoriteIds = useFavoritesStore((state) => state.favoriteIds);
+  const favoritesLoading = useFavoritesStore((state) => state.isLoading);
+  const { laundries, loading: laundriesLoading, error, reload } = useLaundries();
+  const loading = favoritesLoading || laundriesLoading;
   const [searchQuery, setSearchQuery] = useState('');
 
   const favoriteLaundries = useMemo(
     () => laundries.filter((laundry) => favoriteIds.has(laundry.id)),
-    [favoriteIds]
+    [laundries, favoriteIds]
   );
 
   const visibleLaundries = useMemo(
@@ -48,27 +54,35 @@ export default function FavoriteLaundriesScreen() {
 
   return (
     <AppScreen title="Favorite Laundries">
-      {favoriteLaundries.length > 0 ? (
-        <Input
-          placeholder="Search favorites..."
-          icon={<Ionicons name="search" size={18} color={colors.textMuted} />}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          accessibilityRole="search"
-          accessibilityLabel="Search favorites"
-          containerStyle={styles.search}
-        />
-      ) : null}
+      {loading ? (
+        <LoadingState message={t('loadingLaundries')} />
+      ) : error ? (
+        <ErrorState message={t('unableToLoadFavorites')} retryLabel={t('retry')} onRetry={reload} />
+      ) : (
+        <>
+          {favoriteLaundries.length > 0 ? (
+            <Input
+              placeholder="Search favorites..."
+              icon={<Ionicons name="search" size={18} color={colors.textMuted} />}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              accessibilityRole="search"
+              accessibilityLabel="Search favorites"
+              containerStyle={styles.search}
+            />
+          ) : null}
 
-      <View style={styles.list}>
-        {visibleLaundries.length === 0 ? (
-          <EmptyState title={emptyState.title} description={emptyState.description} icon={emptyState.icon} />
-        ) : (
-          visibleLaundries.map((laundry) => (
-            <LaundryCard key={laundry.id} laundry={laundry} onPress={handlePress} />
-          ))
-        )}
-      </View>
+          <View style={styles.list}>
+            {visibleLaundries.length === 0 ? (
+              <EmptyState title={emptyState.title} description={emptyState.description} icon={emptyState.icon} />
+            ) : (
+              visibleLaundries.map((laundry) => (
+                <LaundryCard key={laundry.id} laundry={laundry} onPress={handlePress} />
+              ))
+            )}
+          </View>
+        </>
+      )}
     </AppScreen>
   );
 }

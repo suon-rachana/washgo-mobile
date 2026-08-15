@@ -9,12 +9,11 @@ import { Avatar, SettingsRow } from '@/src/components/profile';
 import { Badge, Button, Card } from '@/src/components/ui';
 import { isSupabaseDataSource } from '@/src/config/dataSource';
 import { mockUser } from '@/src/data/mock';
-import { getUnreadNotificationCount } from '@/src/data/mock/notifications';
+import { useNotifications } from '@/src/hooks/useNotifications';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { useAuthStore } from '@/src/store/auth';
-import { useNotificationsStore } from '@/src/store/notifications';
 import { useSettingsStore } from '@/src/store/settingsStore';
 import { ColorScheme, Spacing } from '@/src/theme';
 
@@ -44,8 +43,7 @@ export default function ProfileScreen() {
   const toggleThemeMode = useSettingsStore((state) => state.toggleThemeMode);
   const language = useSettingsStore((state) => state.language);
 
-  const notifications = useNotificationsStore((state) => state.notifications);
-  const unreadNotificationCount = useMemo(() => getUnreadNotificationCount(notifications), [notifications]);
+  const { unreadCount: unreadNotificationCount } = useNotifications();
 
   const authProfile = useAuthStore((state) => state.profile);
   const authUser = useAuthStore((state) => state.user);

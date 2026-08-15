@@ -13,8 +13,31 @@ import { isSupabaseDataSource } from '@/src/config/dataSource';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useAuthStore } from '@/src/store/auth';
+import { useFavoritesStore } from '@/src/store/favorites';
+import { useNotificationsStore } from '@/src/store/notifications';
 import { useSettingsStore } from '@/src/store/settingsStore';
 import { BATTAMBANG_FONTS } from '@/src/theme/fonts';
+
+// Supabase-mode only: hydrates favorites/notifications once a session exists,
+// and clears them on sign-out so the next account on this device doesn't
+// briefly see the previous user's data. Mock mode's stores are self-contained
+// and untouched by this.
+function useUserScopedStoreSync() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isInitializing = useAuthStore((state) => state.isInitializing);
+
+  useEffect(() => {
+    if (!isSupabaseDataSource || isInitializing) return;
+
+    if (isAuthenticated) {
+      useFavoritesStore.getState().load();
+      useNotificationsStore.getState().load();
+    } else {
+      useFavoritesStore.getState().reset();
+      useNotificationsStore.getState().reset();
+    }
+  }, [isAuthenticated, isInitializing]);
+}
 
 // Keeps the native splash screen up while the Khmer font files load, instead
 // of a flash of system-font Khmer text that then swaps to Battambang.
@@ -64,6 +87,7 @@ export default function RootLayout() {
   }, [initialize]);
 
   useAuthNavigationGuard();
+  useUserScopedStoreSync();
 
   useEffect(() => {
     // fontError still hides the splash screen — English continues to render

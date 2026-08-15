@@ -10,13 +10,12 @@ import { NotificationBadge } from '@/src/components/notification';
 import { Chip, EmptyState, ErrorState, Input, LoadingState } from '@/src/components/ui';
 import { isSupabaseDataSource } from '@/src/config/dataSource';
 import { categories, mockUser, promotions, services } from '@/src/data/mock';
-import { getUnreadNotificationCount } from '@/src/data/mock/notifications';
 import { useLaundries } from '@/src/hooks/useLaundries';
+import { useNotifications } from '@/src/hooks/useNotifications';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { useAuthStore } from '@/src/store/auth';
-import { useNotificationsStore } from '@/src/store/notifications';
 import { ColorScheme, Radius, Spacing } from '@/src/theme';
 import type { Laundry } from '@/src/types/laundry';
 import { matchesSearch } from '@/src/utils/search';
@@ -45,8 +44,7 @@ export default function HomeScreen() {
   const { t } = useTranslation();
   const promotion = promotions[0];
   const [searchQuery, setSearchQuery] = useState('');
-  const notifications = useNotificationsStore((state) => state.notifications);
-  const unreadNotificationCount = useMemo(() => getUnreadNotificationCount(notifications), [notifications]);
+  const { unreadCount: unreadNotificationCount } = useNotifications();
   const { laundries, loading: laundriesLoading, error: laundriesError, reload: reloadLaundries } = useLaundries();
 
   const authProfile = useAuthStore((state) => state.profile);

@@ -4,14 +4,16 @@ import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } fr
 
 import { NotificationItem } from '@/src/components/notification';
 import { AppScreen } from '@/src/components/layout';
-import { Chip, EmptyState } from '@/src/components/ui';
+import { Chip, EmptyState, ErrorState, LoadingState } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
 import { getOrderById } from '@/src/data/mock';
-import { getUnreadNotificationCount, type WashGoNotification } from '@/src/data/mock/notifications';
+import { useNotifications } from '@/src/hooks/useNotifications';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { useNotificationsStore } from '@/src/store/notifications';
 import { ColorScheme, Spacing } from '@/src/theme';
+import type { AppNotification } from '@/src/types/notification';
 
 type NotificationFilter = 'all' | 'unread';
 
@@ -30,29 +32,31 @@ export default function NotificationsScreen() {
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
 
-  const notifications = useNotificationsStore((state) => state.notifications);
-  const markAsRead = useNotificationsStore((state) => state.markAsRead);
-  const markAllAsRead = useNotificationsStore((state) => state.markAllAsRead);
+  const { notifications, unreadCount, isLoading, markAsRead, markAllAsRead, refresh } = useNotifications();
+  const loadError = useNotificationsStore((state) => state.error);
 
-  const unreadCount = useMemo(() => getUnreadNotificationCount(notifications), [notifications]);
   const visibleNotifications = filter === 'unread' ? notifications.filter((item) => !item.isRead) : notifications;
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    // No backend yet — mock the refresh gesture so the screen still feels live.
+    if (isSupabaseDataSource) {
+      refresh().finally(() => setRefreshing(false));
+      return;
+    }
+    // Mock mode has nothing to re-fetch — mock the gesture so it still feels live.
     setTimeout(() => setRefreshing(false), 800);
-  }, []);
+  }, [refresh]);
 
   const handleNotificationPress = useCallback(
-    (notification: WashGoNotification) => {
+    (notification: AppNotification) => {
       markAsRead(notification.id);
 
-      if (notification.type === 'promotion') {
+      if (notification.kind === 'promotion') {
         router.push(SHOPS_HREF);
         return;
       }
 
-      if (notification.type === 'system') {
+      if (notification.kind === 'system') {
         router.push(SETTINGS_HREF);
         return;
       }
@@ -110,6 +114,11 @@ export default function NotificationsScreen() {
         />
       </View>
 
+      {isLoading && notifications.length === 0 ? (
+        <LoadingState message={t('loadingNotifications')} />
+      ) : loadError && notifications.length === 0 ? (
+        <ErrorState message={t('unableToLoadNotifications')} retryLabel={t('retry')} onRetry={refresh} />
+      ) : (
       <FlatList
         data={visibleNotifications}
         keyExtractor={(item) => item.id}
@@ -138,6 +147,7 @@ export default function NotificationsScreen() {
           )
         }
       />
+      )}
     </AppScreen>
   );
 }

@@ -3,19 +3,19 @@ import { ComponentProps, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/src/components/ui';
-import type { NotificationType, WashGoNotification } from '@/src/data/mock/notifications';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { ColorScheme, Radius, Spacing } from '@/src/theme';
+import type { AppNotification, NotificationKind } from '@/src/types/notification';
 import { formatNotificationTime } from '@/src/utils/formatNotificationTime';
 
 export interface NotificationItemProps {
-  notification: WashGoNotification;
+  notification: AppNotification;
   onPress: () => void;
 }
 
-const TYPE_ICON: Record<NotificationType, ComponentProps<typeof Ionicons>['name']> = {
+const TYPE_ICON: Record<NotificationKind, ComponentProps<typeof Ionicons>['name']> = {
   order_created: 'receipt-outline',
   rider_assigned: 'person-add-outline',
   pickup_started: 'navigate-outline',
@@ -24,24 +24,26 @@ const TYPE_ICON: Record<NotificationType, ComponentProps<typeof Ionicons>['name'
   ready: 'checkmark-done-outline',
   out_for_delivery: 'bicycle-outline',
   delivered: 'home-outline',
+  // Supabase notifications collapse every order lifecycle step into one
+  // generic kind — see src/types/notification.ts.
+  order_update: 'receipt-outline',
   promotion: 'pricetag-outline',
   system: 'information-circle-outline',
 };
 
-// Purely presentational — resolves translations/icon/relative time for display
-// only. Which screen to open and how to validate the order lives in the
-// Notifications screen, not here.
+// Purely presentational — title/message already resolved to plain text by
+// useNotifications(); this only handles icon/relative-time display. Which
+// screen to open and how to validate the order lives in the Notifications
+// screen, not here.
 export function NotificationItem({ notification, onPress }: NotificationItemProps) {
   const colors = useThemeColors();
   const typography = useTypography();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
-  const { isRead } = notification;
-  const title = t(notification.titleKey);
-  const message = t(notification.messageKey, notification.messageParams);
+  const { isRead, title, message } = notification;
   const time = formatNotificationTime(notification.createdAt, t);
-  const icon = TYPE_ICON[notification.type];
+  const icon = TYPE_ICON[notification.kind];
 
   return (
     <Card
