@@ -6,8 +6,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SectionHeader } from '@/src/components/common';
 import { FavoriteHeaderButton } from '@/src/components/laundry';
 import { AppScreen } from '@/src/components/layout';
-import { Badge, Button, Card, Chip } from '@/src/components/ui';
-import { laundries } from '@/src/data/mock';
+import { Badge, Button, Card, Chip, EmptyState, ErrorState, LoadingState } from '@/src/components/ui';
+import { useLaundry } from '@/src/hooks/useLaundry';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
@@ -20,7 +20,23 @@ export default function LaundryDetailScreen() {
   const typography = useTypography();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
-  const laundry = laundries.find((item) => item.id === id);
+  const { laundry, loading, error, reload } = useLaundry(id);
+
+  if (loading) {
+    return (
+      <AppScreen title={t('laundryDetails')}>
+        <LoadingState message={t('loadingLaundries')} />
+      </AppScreen>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppScreen title={t('laundryDetails')}>
+        <ErrorState message={t('unableToLoadLaundries')} retryLabel={t('retry')} onRetry={reload} />
+      </AppScreen>
+    );
+  }
 
   if (!laundry) {
     return (
@@ -96,30 +112,64 @@ export default function LaundryDetailScreen() {
         </Card>
       </View>
 
-      <View style={styles.section}>
-        <SectionHeader title="Pickup & Delivery" />
-        <Card variant="outlined">
-          <View style={styles.infoRow}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+      {laundry.pickupWindow && laundry.deliveryWindow ? (
+        <View style={styles.section}>
+          <SectionHeader title="Pickup & Delivery" />
+          <Card variant="outlined">
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoLabel}>Pickup</Text>
+                <Text style={styles.infoValue}>{laundry.pickupWindow}</Text>
+              </View>
             </View>
-            <View style={styles.infoTextWrap}>
-              <Text style={styles.infoLabel}>Pickup</Text>
-              <Text style={styles.infoValue}>{laundry.pickupWindow}</Text>
-            </View>
-          </View>
 
-          <View style={[styles.infoRow, styles.infoRowLast]}>
-            <View style={styles.infoIcon}>
-              <Ionicons name="bicycle-outline" size={18} color={colors.primary} />
+            <View style={[styles.infoRow, styles.infoRowLast]}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="bicycle-outline" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoLabel}>Delivery</Text>
+                <Text style={styles.infoValue}>{laundry.deliveryWindow}</Text>
+              </View>
             </View>
-            <View style={styles.infoTextWrap}>
-              <Text style={styles.infoLabel}>Delivery</Text>
-              <Text style={styles.infoValue}>{laundry.deliveryWindow}</Text>
-            </View>
-          </View>
-        </Card>
-      </View>
+          </Card>
+        </View>
+      ) : laundry.phone || laundry.addressLine ? (
+        // Real (Supabase) laundries don't have a fixed per-shop pickup/delivery
+        // window — scheduling happens per-order — so this falls back to contact
+        // details instead. See src/services/laundryService.ts.
+        <View style={styles.section}>
+          <SectionHeader title={t('contactLaundry')} />
+          <Card variant="outlined">
+            {laundry.phone ? (
+              <View style={styles.infoRow}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="call-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>Phone</Text>
+                  <Text style={styles.infoValue}>{laundry.phone}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {laundry.addressLine ? (
+              <View style={[styles.infoRow, styles.infoRowLast]}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="location-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>Address</Text>
+                  <Text style={styles.infoValue}>{laundry.addressLine}</Text>
+                </View>
+              </View>
+            ) : null}
+          </Card>
+        </View>
+      ) : null}
 
       <View style={[styles.section, styles.lastSection]}>
         <View style={styles.reviewsHeader}>
@@ -127,22 +177,26 @@ export default function LaundryDetailScreen() {
           <Text style={styles.reviewsCount}>{laundry.reviews.length} reviews</Text>
         </View>
 
-        <View style={styles.reviewsList}>
-          {laundry.reviews.map((review) => (
-            <Card key={review.id} variant="outlined" padding="md">
-              <View style={styles.reviewHeader}>
-                <Text style={styles.reviewAuthor}>{review.author}</Text>
-                <View style={styles.reviewRating}>
-                  <Ionicons name="star" size={13} color={colors.warning} />
-                  <Text style={styles.reviewRatingText}>{review.rating.toFixed(1)}</Text>
+        {laundry.reviews.length === 0 ? (
+          <EmptyState title={t('noReviewsYet')} description={t('noReviewsYetDescription')} icon="star-outline" />
+        ) : (
+          <View style={styles.reviewsList}>
+            {laundry.reviews.map((review) => (
+              <Card key={review.id} variant="outlined" padding="md">
+                <View style={styles.reviewHeader}>
+                  <Text style={styles.reviewAuthor}>{review.author}</Text>
+                  <View style={styles.reviewRating}>
+                    <Ionicons name="star" size={13} color={colors.warning} />
+                    <Text style={styles.reviewRatingText}>{review.rating.toFixed(1)}</Text>
+                  </View>
                 </View>
-              </View>
-              <Text style={styles.reviewComment} numberOfLines={2}>
-                {review.comment}
-              </Text>
-            </Card>
-          ))}
-        </View>
+                <Text style={styles.reviewComment} numberOfLines={2}>
+                  {review.comment}
+                </Text>
+              </Card>
+            ))}
+          </View>
+        )}
       </View>
     </AppScreen>
   );

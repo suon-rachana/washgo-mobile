@@ -192,7 +192,12 @@ export type TranslationKey =
   | "contactLaundry"
   | "callRider"
   | "reportAnIssue"
-  | "faq";
+  | "faq"
+  // Phase 2 — laundries & services backed by Supabase
+  | "loadingLaundries"
+  | "unableToLoadLaundries"
+  | "noReviewsYet"
+  | "noReviewsYetDescription";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -394,6 +399,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     callRider: "Call Rider",
     reportAnIssue: "Report an Issue",
     faq: "FAQ",
+
+    loadingLaundries: "Loading laundries…",
+    unableToLoadLaundries: "Unable to load laundries.",
+    noReviewsYet: "No reviews yet",
+    noReviewsYetDescription: "Be the first to review this laundry after your order.",
   },
   km: {
     home: "ទំព័រដើម",
@@ -597,5 +607,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     callRider: "ហៅអ្នកបើកបរ",
     reportAnIssue: "រាយការណ៍ពីបញ្ហា",
     faq: "សំណួរញឹកញាប់",
+
+    loadingLaundries: "កំពុងផ្ទុកហាងបោកគក់…",
+    unableToLoadLaundries: "មិនអាចផ្ទុកហាងបោកគក់បានទេ។",
+    noReviewsYet: "មិនទាន់មានការវាយតម្លៃនៅឡើយទេ",
+    noReviewsYetDescription: "សូមក្លាយជាអ្នកដំបូងវាយតម្លៃហាងបោកគក់នេះបន្ទាប់ពីការកម្មង់របស់អ្នក។",
   },
 };

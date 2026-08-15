@@ -7,16 +7,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CategoryPill, PromoBanner, SectionHeader } from '@/src/components/common';
 import { LaundryCard } from '@/src/components/laundry';
 import { NotificationBadge } from '@/src/components/notification';
-import { Chip, EmptyState, Input } from '@/src/components/ui';
+import { Chip, EmptyState, ErrorState, Input, LoadingState } from '@/src/components/ui';
 import { isSupabaseDataSource } from '@/src/config/dataSource';
-import { categories, laundries, mockUser, promotions, services, type Laundry } from '@/src/data/mock';
+import { categories, mockUser, promotions, services } from '@/src/data/mock';
 import { getUnreadNotificationCount } from '@/src/data/mock/notifications';
+import { useLaundries } from '@/src/hooks/useLaundries';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { useAuthStore } from '@/src/store/auth';
 import { useNotificationsStore } from '@/src/store/notifications';
 import { ColorScheme, Radius, Spacing } from '@/src/theme';
+import type { Laundry } from '@/src/types/laundry';
 import { matchesSearch } from '@/src/utils/search';
 
 // `/shops` and `/notifications` are index routes; the local typed-routes
@@ -45,6 +47,7 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const notifications = useNotificationsStore((state) => state.notifications);
   const unreadNotificationCount = useMemo(() => getUnreadNotificationCount(notifications), [notifications]);
+  const { laundries, loading: laundriesLoading, error: laundriesError, reload: reloadLaundries } = useLaundries();
 
   const authProfile = useAuthStore((state) => state.profile);
   const authUser = useAuthStore((state) => state.user);
@@ -69,7 +72,7 @@ export default function HomeScreen() {
 
   const filteredLaundries = useMemo(
     () => laundries.filter((laundry) => matchesSearch(searchQuery, [laundry.name])),
-    [searchQuery]
+    [laundries, searchQuery]
   );
   const filteredServices = useMemo(
     () => services.filter((service) => matchesSearch(searchQuery, [service.title, service.description])),
@@ -148,7 +151,15 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {hasNoResults ? (
+        {laundriesLoading ? (
+          <View style={styles.section}>
+            <LoadingState message={t('loadingLaundries')} />
+          </View>
+        ) : laundriesError ? (
+          <View style={styles.section}>
+            <ErrorState message={t('unableToLoadLaundries')} retryLabel={t('retry')} onRetry={reloadLaundries} />
+          </View>
+        ) : hasNoResults ? (
           <View style={styles.section}>
             <EmptyState
               title={t('noLaundriesFound')}
