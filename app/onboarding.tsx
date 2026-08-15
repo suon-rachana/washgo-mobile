@@ -15,7 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/src/components/ui';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 
 interface Slide {
   icon: ComponentProps<typeof Ionicons>['name'];
@@ -44,7 +45,8 @@ const SLIDES: Slide[] = [
 export default function OnboardingScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -114,7 +116,7 @@ export default function OnboardingScreen() {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -126,8 +128,9 @@ const createStyles = (colors: ColorScheme) =>
       paddingTop: Spacing.sm,
     },
     skipText: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.textMuted,
     },
     scroll: {
@@ -148,17 +151,19 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.xxl,
     },
     title: {
-      fontSize: Typography.title.fontSize,
-      lineHeight: Typography.title.lineHeight,
-      fontWeight: Typography.title.fontWeight,
+      fontSize: typography.title.fontSize,
+      lineHeight: typography.title.lineHeight,
+      fontWeight: typography.title.fontWeight,
+      fontFamily: typography.title.fontFamily,
       color: colors.text,
       textAlign: 'center',
       marginBottom: Spacing.sm,
     },
     description: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      fontWeight: Typography.body.fontWeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontWeight: typography.body.fontWeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
       textAlign: 'center',
     },

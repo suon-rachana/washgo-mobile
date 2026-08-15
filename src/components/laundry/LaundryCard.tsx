@@ -5,7 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Badge, Card } from '@/src/components/ui';
 import type { Laundry } from '@/src/data/mock';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Spacing } from '@/src/theme';
 
 export interface LaundryCardProps {
   laundry: Laundry;
@@ -14,7 +15,8 @@ export interface LaundryCardProps {
 
 export function LaundryCard({ laundry, onPress }: LaundryCardProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <Card
@@ -53,7 +55,7 @@ export function LaundryCard({ laundry, onPress }: LaundryCardProps) {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     card: {
       width: '100%',
@@ -67,9 +69,10 @@ const createStyles = (colors: ColorScheme) =>
     },
     name: {
       flex: 1,
-      fontSize: Typography.subtitle.fontSize,
-      lineHeight: Typography.subtitle.lineHeight,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      lineHeight: typography.subtitle.lineHeight,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.text,
     },
     metaRow: {
@@ -79,17 +82,20 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.sm,
     },
     metaText: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
     },
     dot: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
       marginHorizontal: Spacing.xxs,
     },
     price: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.primary,
     },
   });

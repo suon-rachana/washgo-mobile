@@ -1,18 +1,16 @@
-import type { Session, User } from '@supabase/supabase-js';
+import type { Session, User } from "@supabase/supabase-js";
 
-import { isSupabaseDataSource } from '@/src/config/dataSource';
-import { getSupabaseClient, supabase } from '@/src/lib/supabase';
+import { isSupabaseDataSource } from "@/src/config/dataSource";
+import { getSupabaseClient, supabase } from "@/src/lib/supabase";
 
-// Normalized, i18n-key-shaped error codes. Screens map these to localized
-// copy via useTranslation() — this layer never returns English text so it
-// can't leak an un-translated string into the UI.
+// Normalized error codes. Screens translate these codes into localized text.
 export type AuthErrorCode =
-  | 'not_configured'
-  | 'invalid_credentials'
-  | 'account_exists'
-  | 'email_verification_required'
-  | 'network_error'
-  | 'unknown';
+  | "not_configured"
+  | "invalid_credentials"
+  | "account_exists"
+  | "email_verification_required"
+  | "network_error"
+  | "unknown";
 
 export interface AuthResult {
   error: AuthErrorCode | null;
@@ -31,100 +29,255 @@ export interface SignInInput {
 }
 
 function normalizeAuthError(error: unknown): AuthErrorCode {
-  if (!error) return 'unknown';
-  const err = error as { code?: string; message?: string };
-  const code = err.code?.toLowerCase() ?? '';
-  const message = err.message?.toLowerCase() ?? '';
+  if (!error) {
+    return "unknown";
+  }
 
-  if (code === 'invalid_credentials' || message.includes('invalid login credentials')) {
-    return 'invalid_credentials';
+  const authError = error as {
+    code?: string;
+    message?: string;
+  };
+
+  const code = authError.code?.toLowerCase() ?? "";
+  const message = authError.message?.toLowerCase() ?? "";
+
+  if (
+    code === "invalid_credentials" ||
+    message.includes("invalid login credentials")
+  ) {
+    return "invalid_credentials";
   }
-  if (code === 'user_already_exists' || code === 'email_exists' || message.includes('already registered')) {
-    return 'account_exists';
+
+  if (
+    code === "user_already_exists" ||
+    code === "email_exists" ||
+    message.includes("already registered")
+  ) {
+    return "account_exists";
   }
-  if (code === 'email_not_confirmed' || message.includes('email not confirmed')) {
-    return 'email_verification_required';
+
+  if (
+    code === "email_not_confirmed" ||
+    message.includes("email not confirmed")
+  ) {
+    return "email_verification_required";
   }
-  if (message.includes('network') || message.includes('fetch failed') || message.includes('failed to fetch')) {
-    return 'network_error';
+
+  if (
+    message.includes("network") ||
+    message.includes("fetch failed") ||
+    message.includes("failed to fetch")
+  ) {
+    return "network_error";
   }
-  return 'unknown';
+
+  return "unknown";
 }
 
-// Auth calls are centralized here rather than scattered across screens, so
-// error normalization and the "Supabase not configured" guard only exist
-// once. Screens should only ever call these methods, never `supabase.auth.*`
-// directly.
 export const authService = {
-  async signUp({ fullName, email, phone, password }: SignUpInput): Promise<AuthResult> {
-    if (!isSupabaseDataSource) return { error: 'not_configured' };
+  async signUp({
+    fullName,
+    email,
+    phone,
+    password,
+  }: SignUpInput): Promise<AuthResult> {
+    if (!isSupabaseDataSource) {
+      return { error: "not_configured" };
+    }
 
-    const { error } = await getSupabaseClient().auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          phone,
+    try {
+      const client = getSupabaseClient();
+
+      const { error } = await client.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            phone: phone.trim(),
+            preferred_language: "en",
+          },
         },
-      },
-    });
+      });
 
-    return { error: error ? normalizeAuthError(error) : null };
+      return {
+        error: error ? normalizeAuthError(error) : null,
+      };
+    } catch (error) {
+      return {
+        error: normalizeAuthError(error),
+      };
+    }
   },
 
   async signIn({ email, password }: SignInInput): Promise<AuthResult> {
-    if (!isSupabaseDataSource) return { error: 'not_configured' };
+    if (!isSupabaseDataSource) {
+      return { error: "not_configured" };
+    }
 
-    const { error } = await getSupabaseClient().auth.signInWithPassword({ email, password });
+    try {
+      const client = getSupabaseClient();
 
-    return { error: error ? normalizeAuthError(error) : null };
+      const { error } = await client.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      return {
+        error: error ? normalizeAuthError(error) : null,
+      };
+    } catch (error) {
+      return {
+        error: normalizeAuthError(error),
+      };
+    }
   },
 
   async signOut(): Promise<AuthResult> {
-    if (!isSupabaseDataSource) return { error: 'not_configured' };
+    if (!isSupabaseDataSource) {
+      return { error: "not_configured" };
+    }
 
-    const { error } = await getSupabaseClient().auth.signOut();
+    try {
+      const client = getSupabaseClient();
+      const { error } = await client.auth.signOut();
 
-    return { error: error ? normalizeAuthError(error) : null };
+      return {
+        error: error ? normalizeAuthError(error) : null,
+      };
+    } catch (error) {
+      return {
+        error: normalizeAuthError(error),
+      };
+    }
   },
 
   async requestPasswordReset(email: string): Promise<AuthResult> {
-    if (!isSupabaseDataSource) return { error: 'not_configured' };
+    if (!isSupabaseDataSource) {
+      return { error: "not_configured" };
+    }
 
-    const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email);
+    try {
+      const client = getSupabaseClient();
 
-    return { error: error ? normalizeAuthError(error) : null };
+      const { error } = await client.auth.resetPasswordForEmail(
+        email.trim().toLowerCase(),
+      );
+
+      return {
+        error: error ? normalizeAuthError(error) : null,
+      };
+    } catch (error) {
+      return {
+        error: normalizeAuthError(error),
+      };
+    }
   },
 
   async getSession(): Promise<Session | null> {
-    if (!isSupabaseDataSource || !supabase) return null;
+    if (!isSupabaseDataSource || !supabase) {
+      return null;
+    }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session;
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("[WashGo] Unable to get auth session:", error);
+        return null;
+      }
+
+      return session;
+    } catch (error) {
+      console.error("[WashGo] Unable to get auth session:", error);
+      return null;
+    }
   },
 
   async getUser(): Promise<User | null> {
-    if (!isSupabaseDataSource || !supabase) return null;
+    if (!isSupabaseDataSource || !supabase) {
+      return null;
+    }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user;
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error) {
+        console.error("[WashGo] Unable to get authenticated user:", error);
+        return null;
+      }
+
+      return user;
+    } catch (error) {
+      console.error("[WashGo] Unable to get authenticated user:", error);
+      return null;
+    }
   },
 
-  // Returns an unsubscribe function directly (rather than the raw
-  // subscription object) so callers can clean up with `return unsubscribe`
-  // from a useEffect without an extra wrapper.
+  // Single source of truth for "which user id should this database read/write
+  // be scoped to" — profileService and addressService both call this instead
+  // of each keeping their own copy.
+  //
+  // Deliberately reads getSession() rather than getUser(). getSession() is a
+  // local lookup that proactively refreshes an expired access token before
+  // returning; getUser() sends the current token to the Auth server as-is.
+  // On React Native, the app can resume from the background with a token
+  // that expired while backgrounded (see the AppState wiring in
+  // src/lib/supabase.ts) — at that moment getUser() can fail with an
+  // "expired JWT" error even though the session is perfectly recoverable,
+  // which was surfacing as "not authenticated" in profile/address reads.
+  async getCurrentUserId(): Promise<string | null> {
+    if (!isSupabaseDataSource || !supabase) {
+      return null;
+    }
+
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("[WashGo] Unable to resolve current session:", error);
+        return null;
+      }
+
+      const userId = session?.user?.id ?? null;
+
+      if (__DEV__) {
+        console.log("[WashGo][diag] getCurrentUserId:", {
+          hasSession: Boolean(session),
+          sessionUserId: userId,
+          sessionError: null,
+        });
+      }
+
+      return userId;
+    } catch (error) {
+      console.error("[WashGo] Unable to resolve current user id:", error);
+      return null;
+    }
+  },
+
   onAuthStateChange(callback: (session: Session | null) => void): () => void {
-    if (!isSupabaseDataSource || !supabase) return () => {};
+    if (!isSupabaseDataSource || !supabase) {
+      return () => {};
+    }
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      callback(session);
+    });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   },
 };

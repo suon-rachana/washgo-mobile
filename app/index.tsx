@@ -6,12 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/src/components/ui';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Shadows, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Shadows, Spacing } from '@/src/theme';
 
 export default function SplashScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -39,7 +41,7 @@ export default function SplashScreen() {
 const CIRCLE_SIZE = 176;
 const BADGE_SIZE = 56;
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -79,16 +81,18 @@ const createStyles = (colors: ColorScheme) =>
       ...Shadows.sm,
     },
     wordmark: {
-      fontSize: Typography.display.fontSize,
-      lineHeight: Typography.display.lineHeight,
-      fontWeight: Typography.display.fontWeight,
+      fontSize: typography.display.fontSize,
+      lineHeight: typography.display.lineHeight,
+      fontWeight: typography.display.fontWeight,
+      fontFamily: typography.display.fontFamily,
       color: colors.text,
       marginBottom: Spacing.xs,
     },
     tagline: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      fontWeight: Typography.body.fontWeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontWeight: typography.body.fontWeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     footer: {

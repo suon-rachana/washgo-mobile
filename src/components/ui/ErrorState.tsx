@@ -3,7 +3,8 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 import { Button } from './Button';
 
 export interface ErrorStateProps {
@@ -17,7 +18,8 @@ export interface ErrorStateProps {
 // t('unableToLoadAddresses'), etc., not a raw error object.
 export function ErrorState({ message, retryLabel, onRetry }: ErrorStateProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <View style={styles.container} accessibilityRole="alert">
@@ -32,7 +34,7 @@ export function ErrorState({ message, retryLabel, onRetry }: ErrorStateProps) {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       alignItems: 'center',
@@ -51,8 +53,9 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.md,
     },
     message: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
       textAlign: 'center',
     },

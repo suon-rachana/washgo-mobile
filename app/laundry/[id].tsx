@@ -1,43 +1,50 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { SectionHeader } from '@/src/components/common';
-import { Badge, Button, Card, Chip } from '@/src/components/ui';
-import { laundries } from '@/src/data/mock';
+import { FavoriteHeaderButton } from '@/src/components/laundry';
+import { AppScreen } from '@/src/components/layout';
+import { Badge, Button, Card, Chip, EmptyState, ErrorState, LoadingState } from '@/src/components/ui';
+import { useLaundry } from '@/src/hooks/useLaundry';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { useFavoritesStore } from '@/src/store/favorites';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { useTranslation } from '@/src/i18n';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 
 export default function LaundryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const laundry = laundries.find((item) => item.id === id);
-  const isFavorite = useFavoritesStore((state) => (laundry ? state.isFavorite(laundry.id) : false));
-  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
+  const typography = useTypography();
+  const { t } = useTranslation();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
+  const { laundry, loading, error, reload } = useLaundry(id);
+
+  if (loading) {
+    return (
+      <AppScreen title={t('laundryDetails')}>
+        <LoadingState message={t('loadingLaundries')} />
+      </AppScreen>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppScreen title={t('laundryDetails')}>
+        <ErrorState message={t('unableToLoadLaundries')} retryLabel={t('retry')} onRetry={reload} />
+      </AppScreen>
+    );
+  }
 
   if (!laundry) {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            style={styles.backButton}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
-          </Pressable>
-        </View>
+      <AppScreen title={t('laundryDetails')}>
         <View style={styles.notFound}>
           <Text style={styles.notFoundText}>This laundry could not be found.</Text>
         </View>
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
@@ -48,84 +55,64 @@ export default function LaundryDetailScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={styles.backButton}
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
+    <AppScreen
+      title={t('laundryDetails')}
+      headerRight={() => <FavoriteHeaderButton laundryId={laundry.id} />}
+      footer={
+        <Button
+          title="Select Services"
+          fullWidth
+          onPress={handleSelectServices}
+          accessibilityHint="Continues to choose services for this laundry"
+        />
+      }
+    >
+      <View style={styles.headerRow}>
+        <Text style={styles.name}>{laundry.name}</Text>
+        <Badge label={laundry.isOpen ? 'Open' : 'Closed'} variant={laundry.isOpen ? 'success' : 'neutral'} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <Text style={styles.name}>{laundry.name}</Text>
-          <View style={styles.headerActions}>
-            <Badge label={laundry.isOpen ? 'Open' : 'Closed'} variant={laundry.isOpen ? 'success' : 'neutral'} />
-            <Pressable
-              onPress={() => toggleFavorite(laundry.id)}
-              hitSlop={11}
-              accessibilityRole="button"
-              accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Favorite laundry'}
-              accessibilityHint={
-                isFavorite ? 'Removes this laundry from your favorites' : 'Marks this laundry as a favorite'
-              }
-              accessibilityState={{ selected: isFavorite }}
-              style={styles.favoriteButton}
+      <View style={styles.metaRow}>
+        <Ionicons name="star" size={16} color={colors.warning} />
+        <Text style={styles.metaText}>{laundry.rating.toFixed(1)}</Text>
+
+        <Text style={styles.dot}>•</Text>
+        <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+        <Text style={styles.metaText}>{laundry.distanceKm.toFixed(1)} km away</Text>
+
+        <Text style={styles.dot}>•</Text>
+        <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+        <Text style={styles.metaText}>{laundry.etaMinutes} min</Text>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Services" />
+        <View style={styles.servicesRow}>
+          {laundry.services.map((service) => (
+            <Chip key={service.id} label={service.label} />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Pricing" />
+        <Card variant="outlined" padding="none">
+          {laundry.services.map((service, index) => (
+            <View
+              key={service.id}
+              style={[styles.priceRow, index < laundry.services.length - 1 && styles.priceRowDivider]}
             >
-              <Ionicons
-                name={isFavorite ? 'heart' : 'heart-outline'}
-                size={22}
-                color={isFavorite ? colors.danger : colors.textMuted}
-              />
-            </Pressable>
-          </View>
-        </View>
+              <Text style={styles.priceLabel}>{service.label}</Text>
+              <Text style={styles.priceValue}>
+                {laundry.currency}
+                {service.price.toFixed(2)}
+              </Text>
+            </View>
+          ))}
+        </Card>
+      </View>
 
-        <View style={styles.metaRow}>
-          <Ionicons name="star" size={16} color={colors.warning} />
-          <Text style={styles.metaText}>{laundry.rating.toFixed(1)}</Text>
-
-          <Text style={styles.dot}>•</Text>
-          <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.metaText}>{laundry.distanceKm.toFixed(1)} km away</Text>
-
-          <Text style={styles.dot}>•</Text>
-          <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.metaText}>{laundry.etaMinutes} min</Text>
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="Services" />
-          <View style={styles.servicesRow}>
-            {laundry.services.map((service) => (
-              <Chip key={service.id} label={service.label} />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="Pricing" />
-          <Card variant="outlined" padding="none">
-            {laundry.services.map((service, index) => (
-              <View
-                key={service.id}
-                style={[styles.priceRow, index < laundry.services.length - 1 && styles.priceRowDivider]}
-              >
-                <Text style={styles.priceLabel}>{service.label}</Text>
-                <Text style={styles.priceValue}>
-                  {laundry.currency}
-                  {service.price.toFixed(2)}
-                </Text>
-              </View>
-            ))}
-          </Card>
-        </View>
-
+      {laundry.pickupWindow && laundry.deliveryWindow ? (
         <View style={styles.section}>
           <SectionHeader title="Pickup & Delivery" />
           <Card variant="outlined">
@@ -150,13 +137,49 @@ export default function LaundryDetailScreen() {
             </View>
           </Card>
         </View>
+      ) : laundry.phone || laundry.addressLine ? (
+        // Real (Supabase) laundries don't have a fixed per-shop pickup/delivery
+        // window — scheduling happens per-order — so this falls back to contact
+        // details instead. See src/services/laundryService.ts.
+        <View style={styles.section}>
+          <SectionHeader title={t('contactLaundry')} />
+          <Card variant="outlined">
+            {laundry.phone ? (
+              <View style={styles.infoRow}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="call-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>Phone</Text>
+                  <Text style={styles.infoValue}>{laundry.phone}</Text>
+                </View>
+              </View>
+            ) : null}
 
-        <View style={[styles.section, styles.lastSection]}>
-          <View style={styles.reviewsHeader}>
-            <Text style={styles.sectionTitle}>Reviews</Text>
-            <Text style={styles.reviewsCount}>{laundry.reviews.length} reviews</Text>
-          </View>
+            {laundry.addressLine ? (
+              <View style={[styles.infoRow, styles.infoRowLast]}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="location-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoLabel}>Address</Text>
+                  <Text style={styles.infoValue}>{laundry.addressLine}</Text>
+                </View>
+              </View>
+            ) : null}
+          </Card>
+        </View>
+      ) : null}
 
+      <View style={[styles.section, styles.lastSection]}>
+        <View style={styles.reviewsHeader}>
+          <Text style={styles.sectionTitle}>Reviews</Text>
+          <Text style={styles.reviewsCount}>{laundry.reviews.length} reviews</Text>
+        </View>
+
+        {laundry.reviews.length === 0 ? (
+          <EmptyState title={t('noReviewsYet')} description={t('noReviewsYetDescription')} icon="star-outline" />
+        ) : (
           <View style={styles.reviewsList}>
             {laundry.reviews.map((review) => (
               <Card key={review.id} variant="outlined" padding="md">
@@ -173,40 +196,14 @@ export default function LaundryDetailScreen() {
               </Card>
             ))}
           </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <Button
-          title="Select Services"
-          fullWidth
-          onPress={handleSelectServices}
-          accessibilityHint="Continues to choose services for this laundry"
-        />
+        )}
       </View>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.md,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      marginBottom: Spacing.sm,
-      marginLeft: -Spacing.xxs,
-    },
-    content: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.xl,
-    },
     notFound: {
       flex: 1,
       alignItems: 'center',
@@ -214,7 +211,8 @@ const createStyles = (colors: ColorScheme) =>
       paddingHorizontal: Spacing.xl,
     },
     notFoundText: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
       textAlign: 'center',
     },
@@ -225,47 +223,42 @@ const createStyles = (colors: ColorScheme) =>
       gap: Spacing.sm,
       marginBottom: Spacing.xs,
     },
-    headerActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.sm,
-    },
-    favoriteButton: {
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     name: {
       flex: 1,
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
+      fontSize: typography.title.fontSize,
+      lineHeight: typography.title.lineHeight,
+      fontWeight: typography.title.fontWeight,
+      fontFamily: typography.title.fontFamily,
       color: colors.text,
     },
     metaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Spacing.xxs,
-      marginBottom: Spacing.xxl,
+      marginBottom: Spacing.xl,
     },
     metaText: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     dot: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
       marginHorizontal: Spacing.xxs,
     },
     section: {
-      marginBottom: Spacing.xxl,
-    },
-    lastSection: {
       marginBottom: Spacing.xl,
     },
+    lastSection: {
+      marginBottom: 0,
+    },
     sectionTitle: {
-      fontSize: Typography.subtitle.fontSize,
-      lineHeight: Typography.subtitle.lineHeight,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      lineHeight: typography.subtitle.lineHeight,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.text,
       marginBottom: Spacing.md,
     },
@@ -286,12 +279,14 @@ const createStyles = (colors: ColorScheme) =>
       borderBottomColor: colors.border,
     },
     priceLabel: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.text,
     },
     priceValue: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.primary,
     },
     infoRow: {
@@ -315,13 +310,15 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     infoLabel: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
       marginBottom: Spacing.xxs,
     },
     infoValue: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
     },
     reviewsHeader: {
@@ -331,7 +328,8 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.md,
     },
     reviewsCount: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
     },
     reviewsList: {
@@ -344,8 +342,9 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.xs,
     },
     reviewAuthor: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
     },
     reviewRating: {
@@ -354,20 +353,14 @@ const createStyles = (colors: ColorScheme) =>
       gap: Spacing.xxs,
     },
     reviewRatingText: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
     },
     reviewComment: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
-    },
-    footer: {
-      paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.md,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      backgroundColor: colors.surface,
     },
   });

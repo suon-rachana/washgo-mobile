@@ -4,7 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Badge, Card } from '@/src/components/ui';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Shadows, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Shadows, Spacing } from '@/src/theme';
 import type { Service } from '@/src/types/service';
 import { formatServicePrice } from '@/src/utils/formatServicePrice';
 
@@ -16,7 +17,8 @@ export interface ServiceCardProps {
 
 export function ServiceCard({ service, selected = false, onToggle }: ServiceCardProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const isDisabled = !!service.comingSoon;
   const tint = service.color ?? colors.primary;
 
@@ -69,7 +71,7 @@ export function ServiceCard({ service, selected = false, onToggle }: ServiceCard
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     selected: {
       borderWidth: 2,
@@ -100,20 +102,23 @@ const createStyles = (colors: ColorScheme) =>
     },
     title: {
       flexShrink: 1,
-      fontSize: Typography.subtitle.fontSize,
-      lineHeight: Typography.subtitle.lineHeight,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      lineHeight: typography.subtitle.lineHeight,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.text,
     },
     description: {
-      fontSize: Typography.caption.fontSize,
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: typography.caption.fontSize,
+      lineHeight: typography.caption.lineHeight,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
       marginBottom: Spacing.xs,
     },
     price: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.primary,
     },
     checkbox: {

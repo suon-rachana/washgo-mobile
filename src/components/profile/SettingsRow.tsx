@@ -3,7 +3,8 @@ import { ReactNode, useMemo } from 'react';
 import { AccessibilityRole, GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 
 export interface SettingsRowProps {
   icon: ReactNode;
@@ -38,7 +39,8 @@ export function SettingsRow({
   accessibilityRole,
 }: SettingsRowProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <Pressable
@@ -81,7 +83,7 @@ export function SettingsRow({
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -113,20 +115,23 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     title: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.text,
     },
     titleDestructive: {
       color: colors.danger,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontWeight: typography.bodyMedium.fontWeight,
     },
     subtitle: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
       marginTop: Spacing.xxs,
     },
     value: {
-      fontSize: Typography.bodyMedium.fontSize,
+      fontSize: typography.bodyMedium.fontSize,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.textMuted,
     },
   });

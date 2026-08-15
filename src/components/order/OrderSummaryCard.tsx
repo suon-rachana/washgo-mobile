@@ -8,8 +8,9 @@ import type { OrderSummary } from '@/src/data/mock/orders';
 import { dateOptions, timeOptions } from '@/src/data/mock/pickupOptions';
 import { services } from '@/src/data/mock/services';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
+import { ColorScheme, Spacing } from '@/src/theme';
 
 export interface OrderSummaryCardProps {
   order: OrderSummary;
@@ -33,8 +34,9 @@ function formatOrderDate(createdAt: string): string {
 
 export function OrderSummaryCard({ order, onTrackPress, onViewDetails }: OrderSummaryCardProps) {
   const colors = useThemeColors();
+  const typography = useTypography();
   const { t } = useTranslation();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   const laundry = laundries.find((item) => item.id === order.laundryId);
   const statusLabel = t(getOrderStatusLabelKey(order.status, order.currentStepId));
@@ -116,7 +118,7 @@ export function OrderSummaryCard({ order, onTrackPress, onViewDetails }: OrderSu
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     header: {
       flexDirection: 'row',
@@ -127,18 +129,21 @@ const createStyles = (colors: ColorScheme) =>
     },
     laundryName: {
       flex: 1,
-      fontSize: Typography.subtitle.fontSize,
-      lineHeight: Typography.subtitle.lineHeight,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      lineHeight: typography.subtitle.lineHeight,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.text,
     },
     orderId: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
       marginBottom: Spacing.sm,
     },
     services: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.text,
       marginBottom: Spacing.sm,
     },
@@ -147,7 +152,8 @@ const createStyles = (colors: ColorScheme) =>
       gap: Spacing.xxs,
     },
     metaText: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
     },
     totalRow: {
@@ -157,12 +163,14 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.md,
     },
     totalLabel: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     total: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.primary,
     },
     actions: {

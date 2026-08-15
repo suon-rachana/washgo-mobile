@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius } from '@/src/theme';
 
 export interface NotificationBadgeProps {
   count: number;
@@ -19,7 +20,8 @@ const BADGE_SIZE = 18;
 // a badge (Home bell, Profile menu row). Renders nothing when count is 0.
 export function NotificationBadge({ count, ringColor, style }: NotificationBadgeProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   if (count <= 0) return null;
 
@@ -38,7 +40,7 @@ export function NotificationBadge({ count, ringColor, style }: NotificationBadge
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     badge: {
       minWidth: BADGE_SIZE,
@@ -50,10 +52,13 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'center',
       paddingHorizontal: 4,
     },
+    // Always renders Latin digits ("1".."9+"), never Khmer script — fontFamily
+    // wired anyway so nothing in the app silently skips the centralized hook.
     text: {
       fontSize: 10,
       lineHeight: 12,
-      fontWeight: Typography.label.fontWeight,
+      fontWeight: typography.label.fontWeight,
+      fontFamily: typography.label.fontFamily,
       color: colors.onDanger,
     },
   });

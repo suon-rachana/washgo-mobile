@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius } from '@/src/theme';
 
 export interface AvatarProps {
   name: string;
@@ -21,7 +22,8 @@ function getInitials(name: string): string {
 // this is the permanent presentation, not a fallback for a missing image.
 export function Avatar({ name, size = 72 }: AvatarProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const initials = getInitials(name);
 
   return (
@@ -34,7 +36,7 @@ export function Avatar({ name, size = 72 }: AvatarProps) {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     circle: {
       backgroundColor: `${colors.primary}1A`,
@@ -42,7 +44,8 @@ const createStyles = (colors: ColorScheme) =>
       justifyContent: 'center',
     },
     initials: {
-      fontWeight: Typography.title.fontWeight,
+      fontWeight: typography.title.fontWeight,
+      fontFamily: typography.title.fontFamily,
       color: colors.primary,
     },
   });

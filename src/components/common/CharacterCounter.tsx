@@ -1,7 +1,7 @@
 import { StyleProp, Text, TextStyle } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
 
 export interface CharacterCounterProps {
   current: number;
@@ -11,12 +11,17 @@ export interface CharacterCounterProps {
 
 export function CharacterCounter({ current, max, style }: CharacterCounterProps) {
   const colors = useThemeColors();
+  const typography = useTypography();
   const isNearLimit = current >= max * 0.9;
 
   return (
     <Text
       style={[
-        { fontSize: Typography.caption.fontSize, color: isNearLimit ? colors.warning : colors.textMuted },
+        {
+          fontSize: typography.caption.fontSize,
+          fontFamily: typography.caption.fontFamily,
+          color: isNearLimit ? colors.warning : colors.textMuted,
+        },
         style,
       ]}
     >

@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
-import { ColorScheme, Radius, Shadows, Spacing, Typography } from '@/src/theme';
+import { ColorScheme, Radius, Shadows, Spacing } from '@/src/theme';
 
 const GRID_ROWS = 6;
 const GRID_COLUMNS = 4;
@@ -21,8 +22,9 @@ interface MockMapCanvasProps {
  */
 export function MockMapCanvas({ onCurrentLocationPress, isLocating }: MockMapCanvasProps) {
   const colors = useThemeColors();
+  const typography = useTypography();
   const { t } = useTranslation();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, typography);
 
   return (
     <View style={styles.wrapper}>
@@ -86,7 +88,7 @@ export function MockMapCanvas({ onCurrentLocationPress, isLocating }: MockMapCan
 
 const MAP_CANVAS_HEIGHT = 300;
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     wrapper: {
       marginBottom: Spacing.xl,
@@ -104,14 +106,16 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     noticeTitle: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
       marginBottom: Spacing.xxs,
     },
     noticeMessage: {
-      fontSize: Typography.caption.fontSize,
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: typography.caption.fontSize,
+      lineHeight: typography.caption.lineHeight,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
     },
     mapCanvas: {

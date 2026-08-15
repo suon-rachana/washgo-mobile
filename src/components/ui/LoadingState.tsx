@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Spacing } from '@/src/theme';
 
 export interface LoadingStateProps {
   message?: string;
@@ -13,7 +14,8 @@ export interface LoadingStateProps {
 // with a container that already owns the screen's SafeAreaView/background.
 export function LoadingState({ message }: LoadingStateProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <View style={styles.container} accessibilityRole="progressbar" accessibilityLabel={message}>
@@ -23,7 +25,7 @@ export function LoadingState({ message }: LoadingStateProps) {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       alignItems: 'center',
@@ -33,8 +35,9 @@ const createStyles = (colors: ColorScheme) =>
     },
     message: {
       marginTop: Spacing.md,
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
       textAlign: 'center',
     },

@@ -1,8 +1,23 @@
 -- WashGo — Phase 1 backend foundation
--- Full platform schema, but only `profiles` and `addresses` are wired into
--- the app in this phase. Everything else (laundries, services, orders,
--- notifications, payments, favorites) is created now so later phases don't
--- need destructive migrations, but has no client integration yet.
+-- Revised initial schema.
+--
+-- Phase 1 app integration:
+--   - profiles
+--   - addresses
+--
+-- Foundation for later phases:
+--   - laundries
+--   - laundry_services
+--   - orders
+--   - order_items
+--   - order_status_history
+--   - notifications
+--   - payments
+--   - favorites
+--
+-- Important:
+-- Customers cannot create orders directly with this migration.
+-- Add a secure create_customer_order() RPC in migration 002.
 
 -- ============================================================================
 -- Extensions
@@ -14,11 +29,24 @@ create extension if not exists pgcrypto;
 -- Enums
 -- ============================================================================
 
-create type public.user_role as enum ('customer', 'rider', 'laundry_owner', 'admin');
+create type public.user_role as enum (
+  'customer',
+  'rider',
+  'laundry_owner',
+  'admin'
+);
 
-create type public.laundry_approval_status as enum ('pending', 'approved', 'rejected');
+create type public.laundry_approval_status as enum (
+  'pending',
+  'approved',
+  'rejected'
+);
 
-create type public.pricing_unit as enum ('per_kg', 'per_item', 'flat');
+create type public.pricing_unit as enum (
+  'per_kg',
+  'per_item',
+  'flat'
+);
 
 create type public.order_status as enum (
   'pending',
@@ -32,9 +60,18 @@ create type public.order_status as enum (
   'cancelled'
 );
 
-create type public.payment_method_type as enum ('cash', 'card', 'wallet');
+create type public.payment_method_type as enum (
+  'cash',
+  'card',
+  'wallet'
+);
 
-create type public.payment_status_type as enum ('pending', 'paid', 'failed', 'refunded');
+create type public.payment_status_type as enum (
+  'pending',
+  'paid',
+  'failed',
+  'refunded'
+);
 
 create type public.notification_type as enum (
   'order_update',
@@ -43,62 +80,75 @@ create type public.notification_type as enum (
 );
 
 -- ============================================================================
--- Helper: keep `updated_at` current on every row update
+-- Shared trigger helper: keep updated_at current
 -- ============================================================================
 
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
-  new.updated_at = now();
+  new.updated_at := now();
   return new;
 end;
 $$;
 
 -- ============================================================================
 -- profiles
--- One row per auth.users row, created automatically by the trigger below.
+-- One profile row per auth.users row.
 -- ============================================================================
 
 create table public.profiles (
-  id uuid primary key references auth.users (id) on delete cascade,
+  id uuid primary key
+    references auth.users (id)
+    on delete cascade,
+
   role public.user_role not null default 'customer',
+
   full_name text,
   phone text,
   email text,
   avatar_url text,
-  preferred_language text not null default 'en' check (preferred_language in ('en', 'km')),
-  theme_preference text not null default 'light' check (theme_preference in ('light', 'dark')),
+
+  preferred_language text not null default 'en'
+    check (preferred_language in ('en', 'km')),
+
+  theme_preference text not null default 'light'
+    check (theme_preference in ('light', 'dark')),
+
   is_active boolean not null default true,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create trigger profiles_set_updated_at
   before update on public.profiles
-  for each row execute function public.set_updated_at();
+  for each row
+  execute function public.set_updated_at();
 
--- Role is never client-writable: silently keep the previously stored value
--- if an UPDATE tries to change it, rather than rejecting the whole request
--- (which would also block legitimate updates to other fields in the same
--- call). Admin role changes are out of scope for this phase and should be
--- done with the Supabase service role or a future secure admin flow.
-create or replace function public.prevent_profile_role_change()
+-- Protect fields controlled by trusted backend/admin flows.
+-- Customers may still update full_name, phone, avatar_url,
+-- preferred_language, and theme_preference.
+create or replace function public.prevent_profile_protected_changes()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
-  if new.role is distinct from old.role then
-    new.role := old.role;
-  end if;
+  new.role := old.role;
+  new.is_active := old.is_active;
+  new.email := old.email;
+
   return new;
 end;
 $$;
 
-create trigger profiles_prevent_role_change
+create trigger profiles_prevent_protected_changes
   before update on public.profiles
-  for each row execute function public.prevent_profile_role_change();
+  for each row
+  execute function public.prevent_profile_protected_changes();
 
 -- ============================================================================
 -- addresses
@@ -106,38 +156,43 @@ create trigger profiles_prevent_role_change
 
 create table public.addresses (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.profiles (id) on delete cascade,
+
+  user_id uuid not null
+    references public.profiles (id)
+    on delete cascade,
+
   label text not null,
   address_line text not null,
   delivery_instructions text,
+
   latitude double precision,
   longitude double precision,
+
   is_default boolean not null default false,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create index addresses_user_id_idx on public.addresses (user_id);
+create index addresses_user_id_idx
+  on public.addresses (user_id);
 
--- A user may have at most one default address — a partial unique index is
--- the cheapest way to guarantee this at the database level regardless of
--- how the client got there.
+-- A user may have at most one default address.
 create unique index addresses_one_default_per_user
   on public.addresses (user_id)
-  where is_default;
+  where is_default = true;
 
 create trigger addresses_set_updated_at
   before update on public.addresses
-  for each row execute function public.set_updated_at();
+  for each row
+  execute function public.set_updated_at();
 
--- Atomically move the "default" flag to a single address owned by the
--- caller. Runs as the caller (security invoker, the default), so normal
--- addresses RLS policies still apply to both updates inside the function —
--- it cannot be used to touch another user's rows.
+-- Atomically change the caller's default address.
 create or replace function public.set_default_address(p_address_id uuid)
 returns void
 language plpgsql
 security invoker
+set search_path = ''
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -147,234 +202,491 @@ begin
   end if;
 
   if not exists (
-    select 1 from public.addresses where id = p_address_id and user_id = v_user_id
+    select 1
+    from public.addresses
+    where id = p_address_id
+      and user_id = v_user_id
   ) then
     raise exception 'Address not found';
   end if;
 
   update public.addresses
   set is_default = false
-  where user_id = v_user_id and is_default and id <> p_address_id;
+  where user_id = v_user_id
+    and is_default = true
+    and id <> p_address_id;
 
   update public.addresses
   set is_default = true
-  where id = p_address_id;
+  where id = p_address_id
+    and user_id = v_user_id;
 end;
 $$;
 
-grant execute on function public.set_default_address(uuid) to authenticated;
-
 -- ============================================================================
--- laundries (schema foundation only — not connected to the app yet)
+-- laundries
+-- Schema foundation only in Phase 1.
 -- ============================================================================
 
 create table public.laundries (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid references public.profiles (id) on delete set null,
+
+  owner_id uuid
+    references public.profiles (id)
+    on delete set null,
+
   name text not null,
   description text,
   phone text,
   address_line text,
+
   latitude double precision,
   longitude double precision,
-  rating_average numeric(2, 1) not null default 0 check (rating_average >= 0 and rating_average <= 5),
-  rating_count integer not null default 0 check (rating_count >= 0),
+
+  rating_average numeric(2, 1) not null default 0
+    check (rating_average >= 0 and rating_average <= 5),
+
+  rating_count integer not null default 0
+    check (rating_count >= 0),
+
   is_open boolean not null default true,
-  approval_status public.laundry_approval_status not null default 'pending',
+
+  approval_status public.laundry_approval_status
+    not null
+    default 'pending',
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create index laundries_owner_id_idx on public.laundries (owner_id);
+create index laundries_owner_id_idx
+  on public.laundries (owner_id);
 
 create trigger laundries_set_updated_at
   before update on public.laundries
-  for each row execute function public.set_updated_at();
+  for each row
+  execute function public.set_updated_at();
+
+-- Protect fields that must be controlled by trusted system/admin flows.
+create or replace function public.prevent_laundry_protected_changes()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.owner_id := old.owner_id;
+  new.approval_status := old.approval_status;
+  new.rating_average := old.rating_average;
+  new.rating_count := old.rating_count;
+
+  return new;
+end;
+$$;
+
+create trigger laundries_prevent_protected_changes
+  before update on public.laundries
+  for each row
+  execute function public.prevent_laundry_protected_changes();
 
 -- ============================================================================
--- laundry_services (schema foundation only — not connected to the app yet)
+-- laundry_services
+-- Schema foundation only in Phase 1.
 -- ============================================================================
 
 create table public.laundry_services (
   id uuid primary key default gen_random_uuid(),
-  laundry_id uuid not null references public.laundries (id) on delete cascade,
+
+  laundry_id uuid not null
+    references public.laundries (id)
+    on delete cascade,
+
   name text not null,
   description text,
-  price numeric(10, 2) not null check (price >= 0),
-  pricing_unit public.pricing_unit not null default 'per_kg',
-  estimated_duration_minutes integer check (estimated_duration_minutes is null or estimated_duration_minutes >= 0),
+
+  price numeric(10, 2) not null
+    check (price >= 0),
+
+  pricing_unit public.pricing_unit
+    not null
+    default 'per_kg',
+
+  estimated_duration_minutes integer
+    check (
+      estimated_duration_minutes is null
+      or estimated_duration_minutes >= 0
+    ),
+
   is_active boolean not null default true,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create index laundry_services_laundry_id_idx on public.laundry_services (laundry_id);
+create index laundry_services_laundry_id_idx
+  on public.laundry_services (laundry_id);
 
 create trigger laundry_services_set_updated_at
   before update on public.laundry_services
-  for each row execute function public.set_updated_at();
+  for each row
+  execute function public.set_updated_at();
 
 -- ============================================================================
--- orders (schema foundation only — not connected to the app yet)
+-- orders
+-- Schema foundation only in Phase 1.
 -- ============================================================================
 
 create table public.orders (
   id uuid primary key default gen_random_uuid(),
-  customer_id uuid not null references public.profiles (id) on delete cascade,
-  laundry_id uuid not null references public.laundries (id) on delete restrict,
-  pickup_rider_id uuid references public.profiles (id) on delete set null,
-  delivery_rider_id uuid references public.profiles (id) on delete set null,
-  -- Address snapshot at order time, so later edits/deletes of the saved
-  -- address never change what a past order shows.
+
+  customer_id uuid not null
+    references public.profiles (id)
+    on delete cascade,
+
+  laundry_id uuid not null
+    references public.laundries (id)
+    on delete restrict,
+
+  pickup_rider_id uuid
+    references public.profiles (id)
+    on delete set null,
+
+  delivery_rider_id uuid
+    references public.profiles (id)
+    on delete set null,
+
+  -- Address snapshot at order time.
   address_label text,
   address_line text not null,
   address_latitude double precision,
   address_longitude double precision,
   delivery_instructions text,
-  status public.order_status not null default 'pending',
+
+  status public.order_status
+    not null
+    default 'pending',
+
   pickup_scheduled_at timestamptz,
   notes text,
-  subtotal numeric(10, 2) not null default 0 check (subtotal >= 0),
-  pickup_fee numeric(10, 2) not null default 0 check (pickup_fee >= 0),
-  delivery_fee numeric(10, 2) not null default 0 check (delivery_fee >= 0),
-  discount numeric(10, 2) not null default 0 check (discount >= 0),
-  total numeric(10, 2) not null default 0 check (total >= 0),
-  payment_method public.payment_method_type not null default 'cash',
-  payment_status public.payment_status_type not null default 'pending',
+
+  subtotal numeric(10, 2) not null default 0
+    check (subtotal >= 0),
+
+  pickup_fee numeric(10, 2) not null default 0
+    check (pickup_fee >= 0),
+
+  delivery_fee numeric(10, 2) not null default 0
+    check (delivery_fee >= 0),
+
+  discount numeric(10, 2) not null default 0
+    check (discount >= 0),
+
+  total numeric(10, 2) not null default 0
+    check (total >= 0),
+
+  payment_method public.payment_method_type
+    not null
+    default 'cash',
+
+  payment_status public.payment_status_type
+    not null
+    default 'pending',
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create index orders_customer_id_idx on public.orders (customer_id);
-create index orders_laundry_id_idx on public.orders (laundry_id);
-create index orders_pickup_rider_id_idx on public.orders (pickup_rider_id);
-create index orders_delivery_rider_id_idx on public.orders (delivery_rider_id);
+create index orders_customer_id_idx
+  on public.orders (customer_id);
+
+create index orders_laundry_id_idx
+  on public.orders (laundry_id);
+
+create index orders_pickup_rider_id_idx
+  on public.orders (pickup_rider_id);
+
+create index orders_delivery_rider_id_idx
+  on public.orders (delivery_rider_id);
+
+create index orders_customer_created_at_idx
+  on public.orders (customer_id, created_at desc);
+
+create index orders_laundry_created_at_idx
+  on public.orders (laundry_id, created_at desc);
 
 create trigger orders_set_updated_at
   before update on public.orders
-  for each row execute function public.set_updated_at();
+  for each row
+  execute function public.set_updated_at();
 
 -- ============================================================================
--- order_items (schema foundation only — not connected to the app yet)
+-- order_items
+-- Schema foundation only in Phase 1.
 -- ============================================================================
 
 create table public.order_items (
   id uuid primary key default gen_random_uuid(),
-  order_id uuid not null references public.orders (id) on delete cascade,
-  service_id uuid references public.laundry_services (id) on delete set null,
-  -- Snapshot of the service name/price at order time, independent of later
-  -- edits to the laundry's service catalog.
+
+  order_id uuid not null
+    references public.orders (id)
+    on delete cascade,
+
+  service_id uuid
+    references public.laundry_services (id)
+    on delete set null,
+
+  -- Service snapshot at order time.
   service_name text not null,
-  quantity numeric(10, 2) not null default 1 check (quantity > 0),
-  unit_price numeric(10, 2) not null check (unit_price >= 0),
-  line_total numeric(10, 2) not null check (line_total >= 0),
+  pricing_unit public.pricing_unit not null,
+
+  quantity numeric(10, 2)
+    not null
+    default 1
+    check (quantity > 0),
+
+  unit_price numeric(10, 2)
+    not null
+    check (unit_price >= 0),
+
+  line_total numeric(10, 2)
+    not null
+    check (line_total >= 0),
+
   created_at timestamptz not null default now()
 );
 
-create index order_items_order_id_idx on public.order_items (order_id);
+create index order_items_order_id_idx
+  on public.order_items (order_id);
 
 -- ============================================================================
--- order_status_history (schema foundation only — not connected to the app yet)
+-- order_status_history
+-- Schema foundation only in Phase 1.
 -- ============================================================================
 
 create table public.order_status_history (
   id uuid primary key default gen_random_uuid(),
-  order_id uuid not null references public.orders (id) on delete cascade,
+
+  order_id uuid not null
+    references public.orders (id)
+    on delete cascade,
+
   status public.order_status not null,
-  changed_by uuid references public.profiles (id) on delete set null,
+
+  changed_by uuid
+    references public.profiles (id)
+    on delete set null,
+
   notes text,
+
   created_at timestamptz not null default now()
 );
 
-create index order_status_history_order_id_idx on public.order_status_history (order_id);
+create index order_status_history_order_id_idx
+  on public.order_status_history (order_id);
+
+create index order_status_history_order_created_at_idx
+  on public.order_status_history (order_id, created_at);
+
+-- Record the initial order status automatically.
+create or replace function public.record_initial_order_status()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  insert into public.order_status_history (
+    order_id,
+    status,
+    changed_by,
+    notes
+  )
+  values (
+    new.id,
+    new.status,
+    null,
+    'Order created'
+  );
+
+  return new;
+end;
+$$;
+
+create trigger orders_record_initial_status
+  after insert on public.orders
+  for each row
+  execute function public.record_initial_order_status();
+
+-- Append later status changes automatically.
+create or replace function public.record_order_status_change()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.status is distinct from old.status then
+    insert into public.order_status_history (
+      order_id,
+      status,
+      changed_by,
+      notes
+    )
+    values (
+      new.id,
+      new.status,
+      auth.uid(),
+      null
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger orders_record_status_change
+  after update of status on public.orders
+  for each row
+  execute function public.record_order_status_change();
 
 -- ============================================================================
--- notifications (schema foundation only — not connected to the app yet)
+-- notifications
+-- Schema foundation only in Phase 1.
 -- ============================================================================
 
 create table public.notifications (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.profiles (id) on delete cascade,
-  type public.notification_type not null default 'system',
+
+  user_id uuid not null
+    references public.profiles (id)
+    on delete cascade,
+
+  type public.notification_type
+    not null
+    default 'system',
+
   title text not null,
   message text not null,
-  related_order_id uuid references public.orders (id) on delete set null,
+
+  related_order_id uuid
+    references public.orders (id)
+    on delete set null,
+
   is_read boolean not null default false,
+
   created_at timestamptz not null default now()
 );
 
-create index notifications_user_id_idx on public.notifications (user_id);
+create index notifications_user_id_idx
+  on public.notifications (user_id);
+
+create index notifications_user_created_at_idx
+  on public.notifications (user_id, created_at desc);
 
 -- ============================================================================
--- payments (schema foundation only — no card/bank data, not connected yet)
+-- payments
+-- No card numbers, bank credentials, or sensitive payment data.
 -- ============================================================================
 
 create table public.payments (
   id uuid primary key default gen_random_uuid(),
-  order_id uuid not null references public.orders (id) on delete cascade,
-  amount numeric(10, 2) not null check (amount >= 0),
+
+  order_id uuid not null
+    references public.orders (id)
+    on delete cascade,
+
+  amount numeric(10, 2) not null
+    check (amount >= 0),
+
   method public.payment_method_type not null,
-  status public.payment_status_type not null default 'pending',
-  -- Opaque reference to an external payment provider's record, if any.
-  -- Never store card numbers, bank credentials, or other sensitive data here.
+
+  status public.payment_status_type
+    not null
+    default 'pending',
+
   provider_reference text,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create index payments_order_id_idx on public.payments (order_id);
+create index payments_order_id_idx
+  on public.payments (order_id);
 
 create trigger payments_set_updated_at
   before update on public.payments
-  for each row execute function public.set_updated_at();
+  for each row
+  execute function public.set_updated_at();
 
 -- ============================================================================
--- favorites (schema foundation only — not connected to the app yet)
+-- favorites
 -- ============================================================================
 
 create table public.favorites (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.profiles (id) on delete cascade,
-  laundry_id uuid not null references public.laundries (id) on delete cascade,
+
+  user_id uuid not null
+    references public.profiles (id)
+    on delete cascade,
+
+  laundry_id uuid not null
+    references public.laundries (id)
+    on delete cascade,
+
   created_at timestamptz not null default now(),
+
   unique (user_id, laundry_id)
 );
 
-create index favorites_user_id_idx on public.favorites (user_id);
+create index favorites_user_id_idx
+  on public.favorites (user_id);
 
 -- ============================================================================
--- New auth user -> profile row
+-- New auth user -> profile
 -- ============================================================================
 
--- Runs as the function owner (security definer) because the inserting
--- session is the Supabase auth service, not the new user, and RLS on
--- `profiles` only allows a user to touch their own row. Role always defaults
--- to 'customer' here — client-supplied metadata can never set it, closing
--- off self-service admin/rider/owner escalation at signup.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
+declare
+  v_preferred_language text;
 begin
-  insert into public.profiles (id, role, full_name, phone, email, preferred_language)
+  v_preferred_language :=
+    coalesce(
+      nullif(new.raw_user_meta_data ->> 'preferred_language', ''),
+      'en'
+    );
+
+  if v_preferred_language not in ('en', 'km') then
+    v_preferred_language := 'en';
+  end if;
+
+  insert into public.profiles (
+    id,
+    role,
+    full_name,
+    phone,
+    email,
+    preferred_language
+  )
   values (
     new.id,
     'customer',
-    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
-    nullif(new.raw_user_meta_data ->> 'phone', ''),
+    nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
+    nullif(trim(new.raw_user_meta_data ->> 'phone'), ''),
     new.email,
-    coalesce(nullif(new.raw_user_meta_data ->> 'preferred_language', ''), 'en')
+    v_preferred_language
   )
   on conflict (id) do nothing;
+
   return new;
 end;
 $$;
 
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute function public.handle_new_user();
+  for each row
+  execute function public.handle_new_user();
 
 -- ============================================================================
 -- Row Level Security
@@ -391,197 +703,344 @@ alter table public.notifications enable row level security;
 alter table public.payments enable row level security;
 alter table public.favorites enable row level security;
 
--- ---- profiles ----
--- No public "list all profiles" policy exists — only an authenticated user
--- reading/writing their own row is permitted.
+-- ============================================================================
+-- profiles policies
+-- ============================================================================
 
 create policy "profiles_select_own"
-  on public.profiles for select
+  on public.profiles
+  for select
   to authenticated
   using (id = auth.uid());
 
 create policy "profiles_update_own"
-  on public.profiles for update
+  on public.profiles
+  for update
   to authenticated
   using (id = auth.uid())
   with check (id = auth.uid());
 
--- Row creation happens only via the handle_new_user trigger (security
--- definer); there is deliberately no client-facing INSERT policy.
+-- No client INSERT or DELETE policy.
+-- Profile creation happens through handle_new_user().
 
--- ---- addresses ----
+-- ============================================================================
+-- addresses policies
+-- ============================================================================
 
 create policy "addresses_select_own"
-  on public.addresses for select
+  on public.addresses
+  for select
   to authenticated
   using (user_id = auth.uid());
 
 create policy "addresses_insert_own"
-  on public.addresses for insert
+  on public.addresses
+  for insert
   to authenticated
   with check (user_id = auth.uid());
 
 create policy "addresses_update_own"
-  on public.addresses for update
+  on public.addresses
+  for update
   to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
 create policy "addresses_delete_own"
-  on public.addresses for delete
+  on public.addresses
+  for delete
   to authenticated
   using (user_id = auth.uid());
 
--- ---- favorites ----
+-- ============================================================================
+-- favorites policies
+-- ============================================================================
 
 create policy "favorites_select_own"
-  on public.favorites for select
+  on public.favorites
+  for select
   to authenticated
   using (user_id = auth.uid());
 
 create policy "favorites_insert_own"
-  on public.favorites for insert
+  on public.favorites
+  for insert
   to authenticated
   with check (user_id = auth.uid());
 
 create policy "favorites_delete_own"
-  on public.favorites for delete
+  on public.favorites
+  for delete
   to authenticated
   using (user_id = auth.uid());
 
--- ---- notifications ----
--- Client can read and mark-as-read; rows are otherwise written by trusted
--- server-side logic (not implemented in this phase), so there is no
--- client-facing INSERT/DELETE policy.
+-- ============================================================================
+-- notifications policies
+-- ============================================================================
 
 create policy "notifications_select_own"
-  on public.notifications for select
+  on public.notifications
+  for select
   to authenticated
   using (user_id = auth.uid());
 
 create policy "notifications_update_own"
-  on public.notifications for update
+  on public.notifications
+  for update
   to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
--- ---- laundries ----
--- Approval status, not the "open now" flag, is the read gate: a
--- temporarily-closed but approved shop should still be visible (e.g. so its
--- hours can be shown), just not bookable.
+-- No client INSERT or DELETE policy.
 
+-- ============================================================================
+-- laundries policies
+-- ============================================================================
+
+-- Authenticated users can read approved laundries.
 create policy "laundries_select_approved"
-  on public.laundries for select
+  on public.laundries
+  for select
   to authenticated
   using (approval_status = 'approved');
 
+-- Owners can also read their own pending/rejected laundry.
 create policy "laundries_owner_select_own"
-  on public.laundries for select
-  to authenticated
-  using (owner_id = auth.uid());
-
-create policy "laundries_owner_insert_own"
-  on public.laundries for insert
-  to authenticated
-  with check (owner_id = auth.uid());
-
-create policy "laundries_owner_update_own"
-  on public.laundries for update
-  to authenticated
-  using (owner_id = auth.uid())
-  with check (owner_id = auth.uid());
-
-create policy "laundries_owner_delete_own"
-  on public.laundries for delete
-  to authenticated
-  using (owner_id = auth.uid());
-
--- ---- laundry_services ----
-
-create policy "laundry_services_select_active"
-  on public.laundry_services for select
+  on public.laundries
+  for select
   to authenticated
   using (
-    is_active
+    owner_id = auth.uid()
     and exists (
-      select 1 from public.laundries l
-      where l.id = laundry_id and l.approval_status = 'approved'
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'laundry_owner'
+        and p.is_active = true
+    )
+  );
+
+create policy "laundries_owner_insert_own"
+  on public.laundries
+  for insert
+  to authenticated
+  with check (
+    owner_id = auth.uid()
+    and exists (
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'laundry_owner'
+        and p.is_active = true
+    )
+  );
+
+create policy "laundries_owner_update_own"
+  on public.laundries
+  for update
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    and exists (
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'laundry_owner'
+        and p.is_active = true
+    )
+  )
+  with check (
+    owner_id = auth.uid()
+    and exists (
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'laundry_owner'
+        and p.is_active = true
+    )
+  );
+
+create policy "laundries_owner_delete_own"
+  on public.laundries
+  for delete
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    and exists (
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'laundry_owner'
+        and p.is_active = true
+    )
+  );
+
+-- ============================================================================
+-- laundry_services policies
+-- ============================================================================
+
+create policy "laundry_services_select_active"
+  on public.laundry_services
+  for select
+  to authenticated
+  using (
+    is_active = true
+    and exists (
+      select 1
+      from public.laundries l
+      where l.id = laundry_id
+        and l.approval_status = 'approved'
     )
   );
 
 create policy "laundry_services_owner_all"
-  on public.laundry_services for all
+  on public.laundry_services
+  for all
   to authenticated
   using (
-    exists (select 1 from public.laundries l where l.id = laundry_id and l.owner_id = auth.uid())
+    exists (
+      select 1
+      from public.laundries l
+      join public.profiles p
+        on p.id = l.owner_id
+      where l.id = laundry_id
+        and l.owner_id = auth.uid()
+        and p.role = 'laundry_owner'
+        and p.is_active = true
+    )
   )
   with check (
-    exists (select 1 from public.laundries l where l.id = laundry_id and l.owner_id = auth.uid())
+    exists (
+      select 1
+      from public.laundries l
+      join public.profiles p
+        on p.id = l.owner_id
+      where l.id = laundry_id
+        and l.owner_id = auth.uid()
+        and p.role = 'laundry_owner'
+        and p.is_active = true
+    )
   );
 
--- ---- orders ----
--- Read-only from the client in this phase. Status/assignment changes are
--- deliberately left to a future secure server-side flow, so there is no
--- client-facing INSERT/UPDATE/DELETE policy — customers cannot freely
--- rewrite order status.
+-- ============================================================================
+-- orders policies
+-- Read-only from clients in Phase 1.
+-- ============================================================================
 
 create policy "orders_select_customer"
-  on public.orders for select
+  on public.orders
+  for select
   to authenticated
   using (customer_id = auth.uid());
 
 create policy "orders_select_laundry_owner"
-  on public.orders for select
+  on public.orders
+  for select
   to authenticated
-  using (exists (select 1 from public.laundries l where l.id = laundry_id and l.owner_id = auth.uid()));
+  using (
+    exists (
+      select 1
+      from public.laundries l
+      where l.id = laundry_id
+        and l.owner_id = auth.uid()
+    )
+  );
 
 create policy "orders_select_rider"
-  on public.orders for select
+  on public.orders
+  for select
   to authenticated
-  using (pickup_rider_id = auth.uid() or delivery_rider_id = auth.uid());
+  using (
+    pickup_rider_id = auth.uid()
+    or delivery_rider_id = auth.uid()
+  );
 
--- ---- order_items ----
--- Visible to whoever can already see the parent order; no direct writes.
+-- No direct client INSERT, UPDATE, or DELETE policy.
+-- A secure RPC will be added in migration 002.
+
+-- ============================================================================
+-- order_items policies
+-- ============================================================================
 
 create policy "order_items_select_via_order"
-  on public.order_items for select
+  on public.order_items
+  for select
   to authenticated
   using (
     exists (
-      select 1 from public.orders o
+      select 1
+      from public.orders o
       where o.id = order_id
         and (
           o.customer_id = auth.uid()
           or o.pickup_rider_id = auth.uid()
           or o.delivery_rider_id = auth.uid()
-          or exists (select 1 from public.laundries l where l.id = o.laundry_id and l.owner_id = auth.uid())
+          or exists (
+            select 1
+            from public.laundries l
+            where l.id = o.laundry_id
+              and l.owner_id = auth.uid()
+          )
         )
     )
   );
 
--- ---- order_status_history ----
+-- ============================================================================
+-- order_status_history policies
+-- ============================================================================
 
 create policy "order_status_history_select_via_order"
-  on public.order_status_history for select
+  on public.order_status_history
+  for select
   to authenticated
   using (
     exists (
-      select 1 from public.orders o
+      select 1
+      from public.orders o
       where o.id = order_id
         and (
           o.customer_id = auth.uid()
           or o.pickup_rider_id = auth.uid()
           or o.delivery_rider_id = auth.uid()
-          or exists (select 1 from public.laundries l where l.id = o.laundry_id and l.owner_id = auth.uid())
+          or exists (
+            select 1
+            from public.laundries l
+            where l.id = o.laundry_id
+              and l.owner_id = auth.uid()
+          )
         )
     )
   );
 
--- ---- payments ----
--- Read-only from the client; payment records are written by a future
--- trusted server-side flow, never directly by the customer.
+-- ============================================================================
+-- payments policies
+-- ============================================================================
 
 create policy "payments_select_via_order"
-  on public.payments for select
+  on public.payments
+  for select
   to authenticated
-  using (exists (select 1 from public.orders o where o.id = order_id and o.customer_id = auth.uid()));
+  using (
+    exists (
+      select 1
+      from public.orders o
+      where o.id = order_id
+        and o.customer_id = auth.uid()
+    )
+  );
+
+-- ============================================================================
+-- Function permissions
+-- ============================================================================
+
+-- Publicly callable RPC used by authenticated customers.
+revoke all on function public.set_default_address(uuid) from public;
+grant execute on function public.set_default_address(uuid) to authenticated;
+
+-- Internal trigger helpers should not be directly callable through the API.
+revoke all on function public.set_updated_at() from public;
+revoke all on function public.prevent_profile_protected_changes() from public;
+revoke all on function public.prevent_laundry_protected_changes() from public;
+revoke all on function public.handle_new_user() from public;
+revoke all on function public.record_initial_order_status() from public;
+revoke all on function public.record_order_status_change() from public;

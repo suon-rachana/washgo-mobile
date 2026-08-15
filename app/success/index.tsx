@@ -6,13 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/src/components/ui';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 import { resetToHome } from '@/src/utils/resetToTab';
 
 export default function PickupSuccessScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
 
   const handleTrackOrder = () => {
@@ -52,7 +54,7 @@ export default function PickupSuccessScreen() {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -74,23 +76,26 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.xl,
     },
     title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
+      fontSize: typography.headline.fontSize,
+      lineHeight: typography.headline.lineHeight,
+      fontWeight: typography.headline.fontWeight,
+      fontFamily: typography.headline.fontFamily,
       color: colors.text,
       marginBottom: Spacing.xs,
       textAlign: 'center',
     },
     message: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
       textAlign: 'center',
       marginBottom: Spacing.md,
     },
     orderId: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.primary,
     },
     footer: {

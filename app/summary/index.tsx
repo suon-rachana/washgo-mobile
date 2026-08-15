@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { ComponentProps, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { SectionHeader } from '@/src/components/common';
+import { AppScreen } from '@/src/components/layout';
 import { Button, Card } from '@/src/components/ui';
 import {
   addresses,
@@ -17,7 +17,9 @@ import {
   timeOptions,
 } from '@/src/data/mock';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { useTranslation } from '@/src/i18n';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 import { estimateOrderTotal } from '@/src/utils/estimateOrderTotal';
 
 interface SummaryRowProps {
@@ -72,7 +74,9 @@ function PriceRow({ label, value, emphasis = false, positive = false, styles }: 
 export default function OrderSummaryScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const { t } = useTranslation();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { laundryId, serviceIds, addressId, sizeId, dateId, timeId } = useLocalSearchParams<{
     laundryId?: string;
     serviceIds?: string;
@@ -111,16 +115,18 @@ export default function OrderSummaryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back" style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.title}>Order Summary</Text>
-        <Text style={styles.subtitle}>Review your pickup before confirming.</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <AppScreen
+      title={t('orderSummary')}
+      footer={
+        <Button
+          title="Request Pickup"
+          variant="accent"
+          fullWidth
+          onPress={handleConfirmPickup}
+          accessibilityHint="Confirms your pickup request and proceeds to payment"
+        />
+      }
+    >
         <View style={styles.section}>
           <SectionHeader title="Booking Details" />
           <Card variant="outlined">
@@ -205,52 +211,12 @@ export default function OrderSummaryScreen() {
             </Text>
           </View>
         </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <Button
-          title="Request Pickup"
-          variant="accent"
-          fullWidth
-          onPress={handleConfirmPickup}
-          accessibilityHint="Confirms your pickup request and proceeds to payment"
-        />
-      </View>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.md,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      marginBottom: Spacing.sm,
-      marginLeft: -Spacing.xxs,
-    },
-    title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
-      color: colors.text,
-      marginBottom: Spacing.xxs,
-    },
-    subtitle: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      color: colors.textMuted,
-    },
-    content: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.xl,
-    },
     section: {
       marginBottom: Spacing.xxl,
     },
@@ -275,22 +241,26 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     summaryLabel: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
       marginBottom: Spacing.xxs,
     },
     summaryValue: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
     },
     summarySubValue: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
       marginTop: Spacing.xxs,
     },
     emptyServicesText: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
       textAlign: 'center',
       paddingVertical: Spacing.lg,
@@ -308,12 +278,14 @@ const createStyles = (colors: ColorScheme) =>
       borderBottomColor: colors.border,
     },
     serviceLabel: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.text,
     },
     serviceValue: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
     },
     priceRow: {
@@ -323,21 +295,25 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.sm,
     },
     priceLabel: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     priceLabelEmphasis: {
-      fontSize: Typography.subtitle.fontSize,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.text,
     },
     priceValue: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.text,
     },
     priceValueEmphasis: {
-      fontSize: Typography.subtitle.fontSize,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.primary,
     },
     priceValuePositive: {
@@ -357,16 +333,9 @@ const createStyles = (colors: ColorScheme) =>
     },
     noteText: {
       flex: 1,
-      fontSize: Typography.caption.fontSize,
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: typography.caption.fontSize,
+      lineHeight: typography.caption.lineHeight,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
-    },
-    footer: {
-      paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.md,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      backgroundColor: colors.surface,
     },
   });

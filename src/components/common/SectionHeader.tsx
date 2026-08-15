@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Spacing } from '@/src/theme';
 
 export interface SectionHeaderProps {
   title: string;
@@ -13,7 +14,8 @@ export interface SectionHeaderProps {
 
 export function SectionHeader({ title, actionLabel, onActionPress, actionAccessibilityHint }: SectionHeaderProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <View style={styles.row}>
@@ -33,7 +35,7 @@ export function SectionHeader({ title, actionLabel, onActionPress, actionAccessi
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -42,14 +44,16 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.md,
     },
     title: {
-      fontSize: Typography.subtitle.fontSize,
-      lineHeight: Typography.subtitle.lineHeight,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      lineHeight: typography.subtitle.lineHeight,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.text,
     },
     action: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.primary,
     },
   });

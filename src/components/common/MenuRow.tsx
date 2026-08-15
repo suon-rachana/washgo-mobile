@@ -3,7 +3,8 @@ import { ComponentProps, useMemo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Spacing } from '@/src/theme';
 
 export interface MenuRowProps {
   icon: ComponentProps<typeof Ionicons>['name'];
@@ -25,7 +26,8 @@ export function MenuRow({
   accessibilityHint,
 }: MenuRowProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <Pressable
@@ -42,7 +44,7 @@ export function MenuRow({
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -60,11 +62,13 @@ const createStyles = (colors: ColorScheme) =>
     },
     label: {
       flex: 1,
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.text,
     },
     labelDanger: {
       color: colors.danger,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
     },
   });

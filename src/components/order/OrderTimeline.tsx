@@ -3,7 +3,8 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 
 export interface OrderTimelineStep {
   id: string;
@@ -17,7 +18,8 @@ export interface OrderTimelineProps {
 
 export function OrderTimeline({ steps, currentStepId }: OrderTimelineProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const currentIndex = steps.findIndex((step) => step.id === currentStepId);
 
   return (
@@ -53,7 +55,7 @@ export function OrderTimeline({ steps, currentStepId }: OrderTimelineProps) {
 const DOT_SIZE = 22;
 const LINE_HEIGHT = Spacing.xl;
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -99,16 +101,19 @@ const createStyles = (colors: ColorScheme) =>
       paddingBottom: Spacing.md,
     },
     label: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     labelActive: {
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
     },
     currentCaption: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.primary,
       marginTop: Spacing.xxs,
     },

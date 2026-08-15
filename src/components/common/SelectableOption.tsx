@@ -4,7 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/src/components/ui';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Shadows, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Shadows, Spacing } from '@/src/theme';
 
 export interface SelectableOptionProps {
   title: string;
@@ -32,7 +33,8 @@ export function SelectableOption({
   accessibilityLabel,
 }: SelectableOptionProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <Card
@@ -63,7 +65,7 @@ export function SelectableOption({
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     optionFlex: {
       flex: 1,
@@ -94,12 +96,14 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     optionTitle: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
     },
     optionDetail: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
       marginTop: Spacing.xxs,
     },

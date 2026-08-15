@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'accent' | 'outline' | 'ghost' | 'danger';
@@ -66,6 +67,7 @@ export function Button({
   accessibilityHint,
 }: ButtonProps) {
   const colors = useThemeColors();
+  const typography = useTypography();
   const isDisabled = disabled || loading;
   const textColor = variantTextColor(colors)[variant];
 
@@ -92,7 +94,18 @@ export function Button({
       ) : (
         <View style={styles.content}>
           {icon ? <View style={styles.icon}>{icon}</View> : null}
-          <Text style={[styles.text, { color: textColor }]}>{title}</Text>
+          <Text
+            style={[
+              styles.text,
+              {
+                color: textColor,
+                lineHeight: typography.button.lineHeight,
+                fontFamily: typography.button.fontFamily,
+              },
+            ]}
+          >
+            {title}
+          </Text>
         </View>
       )}
     </Pressable>

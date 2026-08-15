@@ -1,6 +1,7 @@
 import { isSupabaseDataSource } from '@/src/config/dataSource';
 import { getSupabaseClient } from '@/src/lib/supabase';
 import type { Profile, ProfileUpdate } from '@/src/types/database';
+import { authService } from './authService';
 import { normalizeServiceError, type ServiceErrorCode } from './errors';
 
 export interface ProfileResult {
@@ -12,11 +13,6 @@ export interface ProfileMutationResult {
   error: ServiceErrorCode | null;
 }
 
-async function currentUserId(): Promise<string | null> {
-  const { data } = await getSupabaseClient().auth.getUser();
-  return data.user?.id ?? null;
-}
-
 // Only the fields a customer is allowed to self-edit are exposed here.
 // `role` has no setter — ProfileUpdate's type doesn't include it — and email
 // is intentionally left out: it's owned by Supabase Auth, not this table,
@@ -25,25 +21,53 @@ export const profileService = {
   async fetchCurrentProfile(): Promise<ProfileResult> {
     if (!isSupabaseDataSource) return { data: null, error: 'not_configured' };
 
-    const userId = await currentUserId();
-    if (!userId) return { data: null, error: 'not_authenticated' };
+    try {
+      const userId = await authService.getCurrentUserId();
+      if (!userId) return { data: null, error: 'not_authenticated' };
 
-    const { data, error } = await getSupabaseClient().from('profiles').select('*').eq('id', userId).single();
+      // .maybeSingle(), not .single(): a user whose account predates the
+      // handle_new_user trigger (or who signed up before its migration ran)
+      // may have zero rows here. That's a legitimate "no profile yet" state
+      // that the screen already renders as empty fields — not a query
+      // failure that should surface an error banner.
+      const { data, error } = await getSupabaseClient()
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (error) return { data: null, error: normalizeServiceError(error) };
-    return { data, error: null };
+      if (__DEV__) {
+        console.log('[WashGo][diag] fetchCurrentProfile:', {
+          table: 'profiles',
+          userId,
+          hasData: Boolean(data),
+          error: error ? { code: error.code, message: error.message, details: error.details, hint: error.hint } : null,
+        });
+      }
+
+      if (error) return { data: null, error: normalizeServiceError(error) };
+      return { data, error: null };
+    } catch (error) {
+      console.error('[WashGo] Unable to load current profile:', error);
+      return { data: null, error: normalizeServiceError(error) };
+    }
   },
 
   async updateProfile(update: ProfileUpdate): Promise<ProfileMutationResult> {
     if (!isSupabaseDataSource) return { error: 'not_configured' };
 
-    const userId = await currentUserId();
-    if (!userId) return { error: 'not_authenticated' };
+    try {
+      const userId = await authService.getCurrentUserId();
+      if (!userId) return { error: 'not_authenticated' };
 
-    const { error } = await getSupabaseClient().from('profiles').update(update).eq('id', userId);
+      const { error } = await getSupabaseClient().from('profiles').update(update).eq('id', userId);
 
-    if (error) return { error: normalizeServiceError(error) };
-    return { error: null };
+      if (error) return { error: normalizeServiceError(error) };
+      return { error: null };
+    } catch (error) {
+      console.error('[WashGo] Unable to update profile:', error);
+      return { error: normalizeServiceError(error) };
+    }
   },
 
   updateFullName(fullName: string) {

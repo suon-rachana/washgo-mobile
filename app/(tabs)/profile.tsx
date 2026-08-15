@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 import { useMemo } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { NotificationBadge } from '@/src/components/notification';
@@ -9,13 +9,13 @@ import { Avatar, SettingsRow } from '@/src/components/profile';
 import { Badge, Button, Card } from '@/src/components/ui';
 import { isSupabaseDataSource } from '@/src/config/dataSource';
 import { mockUser } from '@/src/data/mock';
-import { getUnreadNotificationCount } from '@/src/data/mock/notifications';
+import { useNotifications } from '@/src/hooks/useNotifications';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
 import { useAuthStore } from '@/src/store/auth';
-import { useNotificationsStore } from '@/src/store/notifications';
 import { useSettingsStore } from '@/src/store/settingsStore';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
+import { ColorScheme, Spacing } from '@/src/theme';
 
 // These routes are index routes (or, for `/(tabs)/orders`, a route inside a
 // group); the local typed-routes generator doesn't collapse these to a plain
@@ -35,21 +35,35 @@ const ABOUT_HREF = '/about' as Href;
 export default function ProfileScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { t } = useTranslation();
 
   const themeMode = useSettingsStore((state) => state.themeMode);
   const toggleThemeMode = useSettingsStore((state) => state.toggleThemeMode);
   const language = useSettingsStore((state) => state.language);
 
-  const notifications = useNotificationsStore((state) => state.notifications);
-  const unreadNotificationCount = useMemo(() => getUnreadNotificationCount(notifications), [notifications]);
+  const { unreadCount: unreadNotificationCount } = useNotifications();
 
   const authProfile = useAuthStore((state) => state.profile);
+  const authUser = useAuthStore((state) => state.user);
   const signOutFromSupabase = useAuthStore((state) => state.signOut);
-  const displayName = isSupabaseDataSource ? authProfile?.full_name || mockUser.fullName : mockUser.fullName;
-  const displayPhone = isSupabaseDataSource ? authProfile?.phone || '' : mockUser.phone;
-  const displayEmail = isSupabaseDataSource ? authProfile?.email || '' : mockUser.email;
+
+  // Supabase mode must never fall back to the mock user — a missing
+  // `profiles` row (fetch error, trigger lag, RLS denial) should read as
+  // "no data yet", not silently resurrect the prototype's fake identity.
+  // `user_metadata.full_name` is Supabase Auth's own copy of the name (set
+  // at sign-up), so it's a real fallback, not a mock one.
+  const metadataFullName = authUser?.user_metadata?.full_name;
+  const displayName = isSupabaseDataSource
+    ? authProfile?.full_name?.trim() ||
+      (typeof metadataFullName === 'string' ? metadataFullName.trim() : '') ||
+      'WashGo User'
+    : mockUser.fullName;
+  const displayPhone = isSupabaseDataSource ? authProfile?.phone?.trim() || '' : mockUser.phone;
+  const displayEmail = isSupabaseDataSource
+    ? authProfile?.email?.trim() || authUser?.email || ''
+    : mockUser.email;
 
   const handleEditProfile = () => router.push(PERSONAL_INFORMATION_HREF);
 
@@ -79,11 +93,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('profile')}</Text>
-      </View>
-
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Card variant="elevated" style={styles.profileCard}>
           <Avatar name={displayName} />
@@ -216,25 +226,15 @@ export default function ProfileScreen() {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.md,
-    },
-    title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
-      color: colors.text,
-    },
     content: {
       paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.lg,
       paddingBottom: Spacing.xl,
     },
     profileCard: {
@@ -242,15 +242,17 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.xl,
     },
     name: {
-      fontSize: Typography.title.fontSize,
-      lineHeight: Typography.title.lineHeight,
-      fontWeight: Typography.title.fontWeight,
+      fontSize: typography.title.fontSize,
+      lineHeight: typography.title.lineHeight,
+      fontWeight: typography.title.fontWeight,
+      fontFamily: typography.title.fontFamily,
       color: colors.text,
       marginTop: Spacing.md,
       marginBottom: Spacing.xxs,
     },
     contactLine: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     memberBadge: {
@@ -261,9 +263,10 @@ const createStyles = (colors: ColorScheme) =>
       alignSelf: 'stretch',
     },
     sectionLabel: {
-      fontSize: Typography.label.fontSize,
-      fontWeight: Typography.label.fontWeight,
-      letterSpacing: Typography.label.letterSpacing,
+      fontSize: typography.label.fontSize,
+      fontWeight: typography.label.fontWeight,
+      letterSpacing: typography.label.letterSpacing,
+      fontFamily: typography.label.fontFamily,
       color: colors.textMuted,
       marginBottom: Spacing.xs,
       textTransform: 'uppercase',

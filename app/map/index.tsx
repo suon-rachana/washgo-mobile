@@ -1,17 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 import type { Region } from 'react-native-maps';
 
-import { Button, Card } from '@/src/components/ui';
+import { AppScreen } from '@/src/components/layout';
 import { LocationMap, MapErrorBoundary, MockMapCanvas } from '@/src/components/map';
+import { Button, Card } from '@/src/components/ui';
 import { mapLocationAddress } from '@/src/data/mock';
 import { useCurrentLocation } from '@/src/hooks/useCurrentLocation';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 import { formatCoordinates, type Coordinates } from '@/src/utils/coordinates';
 
 // Default pickup coordinates for Siem Reap, Cambodia — used as the initial
@@ -30,7 +31,8 @@ const INITIAL_REGION: Region = {
 export default function ChooseLocationScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { t } = useTranslation();
   const { laundryId, serviceIds } = useLocalSearchParams<{ laundryId?: string; serviceIds?: string }>();
 
@@ -65,95 +67,46 @@ export default function ChooseLocationScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to pickup details"
-          style={styles.backButton}
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.title}>{t('chooseLocation')}</Text>
-        <Text style={styles.subtitle}>{t('moveMapToSelectPickupPoint')}</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <MapErrorBoundary
-          fallback={<MockMapCanvas onCurrentLocationPress={requestFallbackLocation} isLocating={isFallbackLocating} />}
-        >
-          <LocationMap initialRegion={INITIAL_REGION} onCoordinatesChange={handleCoordinatesChange} />
-        </MapErrorBoundary>
-
-        <Card variant="outlined" style={styles.previewCard}>
-          <View style={styles.previewHeader}>
-            <View style={styles.previewIcon}>
-              <Ionicons name="location-outline" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.previewTextWrap}>
-              <Text style={styles.previewTitle}>{t('selectedLocation')}</Text>
-              <Text style={styles.previewSubtitle}>{mapLocationAddress.detail}</Text>
-            </View>
-          </View>
-
-          <View style={styles.coordRow}>
-            <Text style={styles.coordLabel}>{t('selectedCoordinates')}</Text>
-            <Text style={styles.coordValue}>{formatCoordinates(selectedCoordinates)}</Text>
-          </View>
-          {/* Future: use reverse geocoding to display the selected street address. */}
-        </Card>
-      </ScrollView>
-
-      <View style={styles.footer}>
+    <AppScreen
+      title={t('chooseLocation')}
+      footer={
         <Button
           title={t('confirmLocation')}
           fullWidth
           onPress={handleConfirm}
           accessibilityHint="Returns to pickup details with this location selected"
         />
-      </View>
-    </SafeAreaView>
+      }
+    >
+      <MapErrorBoundary
+        fallback={<MockMapCanvas onCurrentLocationPress={requestFallbackLocation} isLocating={isFallbackLocating} />}
+      >
+        <LocationMap initialRegion={INITIAL_REGION} onCoordinatesChange={handleCoordinatesChange} />
+      </MapErrorBoundary>
+
+      <Card variant="outlined" style={styles.previewCard}>
+        <View style={styles.previewHeader}>
+          <View style={styles.previewIcon}>
+            <Ionicons name="location-outline" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.previewTextWrap}>
+            <Text style={styles.previewTitle}>{t('selectedLocation')}</Text>
+            <Text style={styles.previewSubtitle}>{mapLocationAddress.detail}</Text>
+          </View>
+        </View>
+
+        <View style={styles.coordRow}>
+          <Text style={styles.coordLabel}>{t('selectedCoordinates')}</Text>
+          <Text style={styles.coordValue}>{formatCoordinates(selectedCoordinates)}</Text>
+        </View>
+        {/* Future: use reverse geocoding to display the selected street address. */}
+      </Card>
+    </AppScreen>
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.md,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      marginBottom: Spacing.sm,
-      marginLeft: -Spacing.xxs,
-      minWidth: 44,
-      minHeight: 44,
-      alignItems: 'flex-start',
-      justifyContent: 'center',
-    },
-    title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
-      color: colors.text,
-      marginBottom: Spacing.xxs,
-    },
-    subtitle: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      color: colors.textMuted,
-    },
-    content: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.xl,
-    },
     previewCard: {
       marginBottom: Spacing.xl,
     },
@@ -175,13 +128,15 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
     },
     previewTitle: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
       marginBottom: Spacing.xxs,
     },
     previewSubtitle: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     coordRow: {
@@ -193,20 +148,14 @@ const createStyles = (colors: ColorScheme) =>
       borderTopColor: colors.border,
     },
     coordLabel: {
-      fontSize: Typography.body.fontSize,
+      fontSize: typography.body.fontSize,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     coordValue: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.text,
-    },
-    footer: {
-      paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.md,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      backgroundColor: colors.surface,
     },
   });

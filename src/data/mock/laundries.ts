@@ -1,30 +1,6 @@
-export interface LaundryService {
-  id: string;
-  label: string;
-  price: number;
-}
+import type { Laundry } from '@/src/types/laundry';
 
-export interface LaundryReview {
-  id: string;
-  author: string;
-  rating: number;
-  comment: string;
-}
-
-export interface Laundry {
-  id: string;
-  name: string;
-  rating: number;
-  distanceKm: number;
-  etaMinutes: number;
-  startingPrice: number;
-  currency: string;
-  isOpen: boolean;
-  pickupWindow: string;
-  deliveryWindow: string;
-  services: LaundryService[];
-  reviews: LaundryReview[];
-}
+export type { Laundry, LaundryService, LaundryReview } from '@/src/types/laundry';
 
 export const laundries: Laundry[] = [
   {

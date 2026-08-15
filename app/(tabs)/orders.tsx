@@ -1,6 +1,6 @@
 import { useRouter, type Href } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OrderSummaryCard } from '@/src/components/order';
@@ -8,7 +8,7 @@ import { Chip, EmptyState } from '@/src/components/ui';
 import { activeOrders, pastOrders, type OrderSummary } from '@/src/data/mock';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTranslation } from '@/src/i18n';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
+import { ColorScheme, Spacing } from '@/src/theme';
 
 type OrdersFilter = 'active' | 'history';
 
@@ -57,12 +57,7 @@ export default function OrdersScreen() {
   }, [router]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('orders')}</Text>
-        <Text style={styles.subtitle}>{t('ordersSubtitle')}</Text>
-      </View>
-
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.tabRow}>
         <Chip
           label={t('active')}
@@ -122,27 +117,11 @@ const createStyles = (colors: ColorScheme) =>
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.md,
-    },
-    title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
-      color: colors.text,
-      marginBottom: Spacing.xxs,
-    },
-    subtitle: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      color: colors.textMuted,
-    },
     tabRow: {
       flexDirection: 'row',
       gap: Spacing.sm,
       paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.lg,
       marginBottom: Spacing.lg,
     },
     listContent: {

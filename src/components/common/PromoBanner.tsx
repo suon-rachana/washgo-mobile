@@ -2,7 +2,8 @@ import { GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-
 import { useMemo } from 'react';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Shadows, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Shadows, Spacing } from '@/src/theme';
 
 export interface PromoBannerProps {
   title: string;
@@ -12,7 +13,8 @@ export interface PromoBannerProps {
 
 export function PromoBanner({ title, ctaLabel, onPress }: PromoBannerProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
     <View style={styles.container}>
@@ -34,7 +36,7 @@ export function PromoBanner({ title, ctaLabel, onPress }: PromoBannerProps) {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       borderRadius: Radius.lg,
@@ -67,9 +69,10 @@ const createStyles = (colors: ColorScheme) =>
       gap: Spacing.lg,
     },
     title: {
-      fontSize: Typography.title.fontSize,
-      lineHeight: Typography.title.lineHeight,
-      fontWeight: Typography.title.fontWeight,
+      fontSize: typography.title.fontSize,
+      lineHeight: typography.title.lineHeight,
+      fontWeight: typography.title.fontWeight,
+      fontFamily: typography.title.fontFamily,
       color: colors.onPrimary,
       maxWidth: '80%',
     },
@@ -84,8 +87,9 @@ const createStyles = (colors: ColorScheme) =>
       backgroundColor: colors.accentPressed,
     },
     ctaText: {
-      fontSize: Typography.button.fontSize,
-      fontWeight: Typography.button.fontWeight,
+      fontSize: typography.button.fontSize,
+      fontWeight: typography.button.fontWeight,
+      fontFamily: typography.button.fontFamily,
       color: colors.onAccent,
     },
   });

@@ -2,17 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState, type ComponentProps } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState } from '@/src/components/ui';
 import { isSupabaseDataSource } from '@/src/config/dataSource';
 import { addresses as mockAddresses, type Address as MockAddress } from '@/src/data/mock';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation, type TranslationKey } from '@/src/i18n';
+import { AppScreen } from '@/src/components/layout';
 import { addressService } from '@/src/services/addressService';
 import type { ServiceErrorCode } from '@/src/services/errors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 import type { AddressRow } from '@/src/types/database';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -101,8 +102,9 @@ function AddressCard({ address, onEdit, onDelete, onSetDefault, colors, styles, 
 export default function SavedAddressesScreen() {
   const router = useRouter();
   const colors = useThemeColors();
+  const typography = useTypography();
   const { t } = useTranslation();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   const [addresses, setAddresses] = useState<DisplayAddress[]>(
     isSupabaseDataSource ? [] : mockAddresses.map(fromMockAddress)
@@ -152,7 +154,13 @@ export default function SavedAddressesScreen() {
     if (error) {
       setAddresses(previous);
       Alert.alert(t('unableToUpdateAddress'), undefined, [{ text: t('cancel'), style: 'cancel' }]);
+      return;
     }
+
+    // Optimistic update above is what the user sees immediately; reconcile
+    // quietly with Supabase afterward so the list can't drift from the
+    // server's actual is_default state.
+    loadAddresses(true);
   };
 
   const handleDelete = (address: DisplayAddress) => {
@@ -181,11 +189,17 @@ export default function SavedAddressesScreen() {
             return;
           }
 
+          // Remove it from view immediately rather than waiting on a refetch.
           const remaining = addresses.filter((item) => item.id !== address.id);
+          setAddresses(remaining);
+
+          // Deleting the default address promotes the next-oldest remaining
+          // one — same documented rule as mock mode above.
           if (address.isDefault && remaining.length > 0) {
             await addressService.setDefault(remaining[0].id);
           }
-          loadAddresses();
+
+          loadAddresses(true);
         },
       },
     ]);
@@ -196,15 +210,14 @@ export default function SavedAddressesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back" style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.title}>{t('savedAddresses')}</Text>
-        <Text style={styles.subtitle}>Manage your pickup and delivery locations.</Text>
-      </View>
-
+    <AppScreen
+      title={t('savedAddresses')}
+      refreshControl={
+        isSupabaseDataSource ? (
+          <RefreshControl refreshing={isRefreshing} onRefresh={() => loadAddresses(true)} tintColor={colors.primary} />
+        ) : undefined
+      }
+    >
       {isLoading ? (
         <LoadingState message={t('loadingAccount')} />
       ) : loadError ? (
@@ -213,89 +226,47 @@ export default function SavedAddressesScreen() {
           retryLabel={t('retry')}
           onRetry={() => loadAddresses()}
         />
+      ) : addresses.length === 0 ? (
+        <EmptyState
+          icon="location-outline"
+          title={t('savedAddresses')}
+          description="You haven't saved any addresses yet."
+          actionLabel={t('addAddress')}
+          onActionPress={handleAdd}
+        />
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            isSupabaseDataSource ? (
-              <RefreshControl refreshing={isRefreshing} onRefresh={() => loadAddresses(true)} tintColor={colors.primary} />
-            ) : undefined
-          }
-        >
-          {addresses.length === 0 ? (
-            <EmptyState
-              icon="location-outline"
-              title={t('savedAddresses')}
-              description="You haven't saved any addresses yet."
-              actionLabel={t('addAddress')}
-              onActionPress={handleAdd}
-            />
-          ) : (
-            <>
-              <View style={styles.list}>
-                {addresses.map((address) => (
-                  <AddressCard
-                    key={address.id}
-                    address={address}
-                    onEdit={() => handleEdit(address)}
-                    onDelete={() => handleDelete(address)}
-                    onSetDefault={() => handleSetDefault(address)}
-                    colors={colors}
-                    styles={styles}
-                    t={t}
-                  />
-                ))}
-              </View>
-
-              <Button
-                title={t('addAddress')}
-                fullWidth
-                icon={<Ionicons name="add" size={16} color={colors.onPrimary} />}
-                onPress={handleAdd}
-                accessibilityLabel={t('addAddress')}
-                style={styles.addButton}
+        <>
+          <View style={styles.list}>
+            {addresses.map((address) => (
+              <AddressCard
+                key={address.id}
+                address={address}
+                onEdit={() => handleEdit(address)}
+                onDelete={() => handleDelete(address)}
+                onSetDefault={() => handleSetDefault(address)}
+                colors={colors}
+                styles={styles}
+                t={t}
               />
-            </>
-          )}
-        </ScrollView>
+            ))}
+          </View>
+
+          <Button
+            title={t('addAddress')}
+            fullWidth
+            icon={<Ionicons name="add" size={16} color={colors.onPrimary} />}
+            onPress={handleAdd}
+            accessibilityLabel={t('addAddress')}
+            style={styles.addButton}
+          />
+        </>
       )}
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.md,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      marginBottom: Spacing.sm,
-      marginLeft: -Spacing.xxs,
-    },
-    title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
-      color: colors.text,
-      marginBottom: Spacing.xxs,
-    },
-    subtitle: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      color: colors.textMuted,
-    },
-    content: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.huge,
-      flexGrow: 1,
-    },
     list: {
       gap: Spacing.md,
     },
@@ -323,14 +294,16 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.xxs,
     },
     cardLabel: {
-      fontSize: Typography.subtitle.fontSize,
-      lineHeight: Typography.subtitle.lineHeight,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      lineHeight: typography.subtitle.lineHeight,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.text,
     },
     cardDetail: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
     setDefaultRow: {
@@ -338,8 +311,9 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.md,
     },
     setDefaultText: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.primary,
     },
     cardActions: {

@@ -1,37 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { SectionHeader } from '@/src/components/common';
+import { AppScreen } from '@/src/components/layout';
 import { Card } from '@/src/components/ui';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
+import { ColorScheme, Spacing } from '@/src/theme';
 
 export default function LegalScreen() {
-  const router = useRouter();
   const colors = useThemeColors();
+  const typography = useTypography();
   const { t } = useTranslation();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={styles.backButton}
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.title}>{t('termsAndPrivacy')}</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <AppScreen title={t('termsAndPrivacy')}>
         <Card variant="outlined" style={styles.noticeCard}>
           <View style={styles.noticeRow}>
             <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
@@ -63,36 +49,12 @@ export default function LegalScreen() {
             </Text>
           </Card>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.md,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      marginBottom: Spacing.sm,
-      marginLeft: -Spacing.xxs,
-    },
-    title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
-      color: colors.text,
-    },
-    content: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.xl,
-    },
     noticeCard: {
       marginBottom: Spacing.xl,
     },
@@ -103,8 +65,9 @@ const createStyles = (colors: ColorScheme) =>
     },
     noticeText: {
       flex: 1,
-      fontSize: Typography.caption.fontSize,
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: typography.caption.fontSize,
+      lineHeight: typography.caption.lineHeight,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
     },
     section: {
@@ -114,8 +77,9 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.xl,
     },
     paragraph: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
     },
   });

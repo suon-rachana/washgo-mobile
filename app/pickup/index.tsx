@@ -1,15 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CharacterCounter, SelectableOption } from '@/src/components/common';
+import { AppScreen } from '@/src/components/layout';
 import { Button, Input } from '@/src/components/ui';
 import { addresses, dateOptions, mapLocationAddress, sizeOptions, timeOptions } from '@/src/data/mock';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 import { formatCoordinates, parseLatitudeParam, parseLongitudeParam } from '@/src/utils/coordinates';
 
 const NOTES_MAX_LENGTH = 150;
@@ -17,7 +18,8 @@ const NOTES_MAX_LENGTH = 150;
 export default function PickupBookingScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { t } = useTranslation();
   const { laundryId, serviceIds, selectedLocation, latitude, longitude } = useLocalSearchParams<{
     laundryId?: string;
@@ -91,117 +93,10 @@ export default function PickupBookingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back" style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.title}>Pickup Details</Text>
-        <Text style={styles.subtitle}>Tell us when and where to collect your laundry.</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pickup Address</Text>
-          <View style={styles.optionList}>
-            {addressOptions.map((address) => (
-              <SelectableOption
-                key={address.id}
-                title={address.label}
-                detail={address.detail}
-                icon={address.icon}
-                selected={addressId === address.id}
-                onPress={() => setAddressId(address.id)}
-                accessibilityLabel={`Select pickup address ${address.label}`}
-              />
-            ))}
-            <Pressable
-              onPress={() => console.log('Add new address pressed')}
-              accessibilityRole="button"
-              accessibilityLabel="Add new address"
-              accessibilityHint="Opens a form to save a new pickup address"
-              style={({ pressed }) => [styles.addAddress, pressed && styles.addAddressPressed]}
-            >
-              <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
-              <Text style={styles.addAddressText}>Add New Address</Text>
-            </Pressable>
-          </View>
-
-          <Button
-            title={t('chooseOnMap')}
-            variant="outline"
-            fullWidth
-            onPress={handleChooseOnMap}
-            icon={<Ionicons name="map-outline" size={16} color={colors.primary} />}
-            accessibilityHint="Opens a map to choose your pickup point"
-            style={styles.chooseOnMapButton}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Laundry Size Estimate</Text>
-          <View style={styles.optionList}>
-            {sizeOptions.map((size) => (
-              <SelectableOption
-                key={size.id}
-                title={size.label}
-                detail={size.detail}
-                selected={sizeId === size.id}
-                onPress={() => setSizeId(size.id)}
-                accessibilityLabel={`Select laundry size ${size.label}`}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pickup Date</Text>
-          <View style={styles.optionRowGroup}>
-            {dateOptions.map((date) => (
-              <SelectableOption
-                key={date.id}
-                title={date.label}
-                selected={dateId === date.id}
-                onPress={() => setDateId(date.id)}
-                fullWidth={false}
-                accessibilityLabel={`Select pickup date ${date.label}`}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pickup Time</Text>
-          <View style={styles.optionList}>
-            {timeOptions.map((time) => (
-              <SelectableOption
-                key={time.id}
-                title={time.label}
-                detail={time.detail}
-                selected={timeId === time.id}
-                onPress={() => setTimeId(time.id)}
-                accessibilityLabel={`Select pickup time ${time.label}`}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={[styles.section, styles.lastSection]}>
-          <Text style={styles.sectionTitle}>Pickup Notes</Text>
-          <Input
-            placeholder="Any notes for the rider?"
-            multiline
-            numberOfLines={4}
-            maxLength={NOTES_MAX_LENGTH}
-            value={notes}
-            onChangeText={setNotes}
-            accessibilityLabel="Pickup notes"
-          />
-          <CharacterCounter current={notes.length} max={NOTES_MAX_LENGTH} style={styles.counter} />
-        </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
+    <AppScreen
+      title={t('pickupDetails')}
+      keyboardAvoiding
+      footer={
         <Button
           title="Schedule Pickup"
           fullWidth
@@ -209,52 +104,123 @@ export default function PickupBookingScreen() {
           onPress={handleContinue}
           accessibilityHint="Continues to review your order summary"
         />
+      }
+    >
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Pickup Address</Text>
+        <View style={styles.optionList}>
+          {addressOptions.map((address) => (
+            <SelectableOption
+              key={address.id}
+              title={address.label}
+              detail={address.detail}
+              icon={address.icon}
+              selected={addressId === address.id}
+              onPress={() => setAddressId(address.id)}
+              accessibilityLabel={`Select pickup address ${address.label}`}
+            />
+          ))}
+          <Pressable
+            onPress={() => console.log('Add new address pressed')}
+            accessibilityRole="button"
+            accessibilityLabel="Add new address"
+            accessibilityHint="Opens a form to save a new pickup address"
+            style={({ pressed }) => [styles.addAddress, pressed && styles.addAddressPressed]}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+            <Text style={styles.addAddressText}>Add New Address</Text>
+          </Pressable>
+        </View>
+
+        <Button
+          title={t('chooseOnMap')}
+          variant="outline"
+          fullWidth
+          onPress={handleChooseOnMap}
+          icon={<Ionicons name="map-outline" size={16} color={colors.primary} />}
+          accessibilityHint="Opens a map to choose your pickup point"
+          style={styles.chooseOnMapButton}
+        />
       </View>
-    </SafeAreaView>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Laundry Size Estimate</Text>
+        <View style={styles.optionList}>
+          {sizeOptions.map((size) => (
+            <SelectableOption
+              key={size.id}
+              title={size.label}
+              detail={size.detail}
+              selected={sizeId === size.id}
+              onPress={() => setSizeId(size.id)}
+              accessibilityLabel={`Select laundry size ${size.label}`}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Pickup Date</Text>
+        <View style={styles.optionRowGroup}>
+          {dateOptions.map((date) => (
+            <SelectableOption
+              key={date.id}
+              title={date.label}
+              selected={dateId === date.id}
+              onPress={() => setDateId(date.id)}
+              fullWidth={false}
+              accessibilityLabel={`Select pickup date ${date.label}`}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Pickup Time</Text>
+        <View style={styles.optionList}>
+          {timeOptions.map((time) => (
+            <SelectableOption
+              key={time.id}
+              title={time.label}
+              detail={time.detail}
+              selected={timeId === time.id}
+              onPress={() => setTimeId(time.id)}
+              accessibilityLabel={`Select pickup time ${time.label}`}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={[styles.section, styles.lastSection]}>
+        <Text style={styles.sectionTitle}>Pickup Notes</Text>
+        <Input
+          placeholder="Any notes for the rider?"
+          multiline
+          numberOfLines={4}
+          maxLength={NOTES_MAX_LENGTH}
+          value={notes}
+          onChangeText={setNotes}
+          accessibilityLabel="Pickup notes"
+        />
+        <CharacterCounter current={notes.length} max={NOTES_MAX_LENGTH} style={styles.counter} />
+      </View>
+    </AppScreen>
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.md,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      marginBottom: Spacing.sm,
-      marginLeft: -Spacing.xxs,
-    },
-    title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
-      color: colors.text,
-      marginBottom: Spacing.xxs,
-    },
-    subtitle: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      color: colors.textMuted,
-    },
-    content: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.xl,
-    },
     section: {
-      marginBottom: Spacing.xxl,
+      marginBottom: Spacing.xl,
     },
     lastSection: {
       marginBottom: 0,
     },
     sectionTitle: {
-      fontSize: Typography.subtitle.fontSize,
-      lineHeight: Typography.subtitle.lineHeight,
-      fontWeight: Typography.subtitle.fontWeight,
+      fontSize: typography.subtitle.fontSize,
+      lineHeight: typography.subtitle.lineHeight,
+      fontWeight: typography.subtitle.fontWeight,
+      fontFamily: typography.subtitle.fontFamily,
       color: colors.text,
       marginBottom: Spacing.md,
     },
@@ -284,20 +250,13 @@ const createStyles = (colors: ColorScheme) =>
       opacity: 0.7,
     },
     addAddressText: {
-      fontSize: Typography.bodyMedium.fontSize,
-      fontWeight: Typography.bodyMedium.fontWeight,
+      fontSize: typography.bodyMedium.fontSize,
+      fontWeight: typography.bodyMedium.fontWeight,
+      fontFamily: typography.bodyMedium.fontFamily,
       color: colors.primary,
     },
     counter: {
       alignSelf: 'flex-end',
       marginTop: Spacing.xxs,
-    },
-    footer: {
-      paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.md,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      backgroundColor: colors.surface,
     },
   });

@@ -10,7 +10,8 @@ import {
 } from "react-native";
 
 import { useThemeColors } from "@/src/hooks/useThemeColors";
-import { ColorScheme, Radius, Spacing, Typography } from "@/src/theme";
+import { useTypography } from "@/src/hooks/useTypography";
+import { ColorScheme, Radius, Spacing } from "@/src/theme";
 
 export type InputVariant = "outline" | "filled";
 
@@ -38,7 +39,9 @@ export function Input({
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
+  const isMultiline = !!textInputProps.multiline;
 
   return (
     <View style={[fullWidth && styles.fullWidth, containerStyle]}>
@@ -47,6 +50,7 @@ export function Input({
       <View
         style={[
           styles.field,
+          isMultiline && styles.fieldMultiline,
           variant === "filled" ? styles.filled : styles.outline,
           isFocused && styles.focused,
           !!error && styles.errorBorder,
@@ -58,6 +62,7 @@ export function Input({
           editable={!disabled}
           placeholderTextColor={colors.textMuted}
           style={styles.input}
+          textAlignVertical={isMultiline ? "top" : "center"}
           // Falls back to the visible `label` (plus any validation error) so
           // every labeled field has an accessible name by default; callers
           // (e.g. search bars) can still override via an explicit
@@ -81,16 +86,17 @@ export function Input({
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     fullWidth: {
       alignSelf: "stretch",
     },
     label: {
-      fontSize: Typography.label.fontSize,
-      lineHeight: Typography.label.lineHeight,
-      fontWeight: Typography.label.fontWeight,
-      letterSpacing: Typography.label.letterSpacing,
+      fontSize: typography.label.fontSize,
+      lineHeight: typography.label.lineHeight,
+      fontWeight: typography.label.fontWeight,
+      letterSpacing: typography.label.letterSpacing,
+      fontFamily: typography.label.fontFamily,
       color: colors.text,
       marginBottom: Spacing.xxs,
     },
@@ -101,6 +107,12 @@ const createStyles = (colors: ColorScheme) =>
       borderWidth: 1,
       minHeight: 48,
       paddingHorizontal: Spacing.md,
+    },
+    fieldMultiline: {
+      // Multiline text should start at the top of the field, not sit
+      // centered — matters once Khmer's taller line height makes wrapped
+      // text noticeably longer than English at the same width.
+      alignItems: "flex-start",
     },
     outline: {
       backgroundColor: colors.inputBackground,
@@ -124,15 +136,17 @@ const createStyles = (colors: ColorScheme) =>
     },
     input: {
       flex: 1,
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      fontWeight: Typography.body.fontWeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontWeight: typography.body.fontWeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.text,
       paddingVertical: Spacing.sm,
     },
     error: {
-      fontSize: Typography.caption.fontSize,
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: typography.caption.fontSize,
+      lineHeight: typography.caption.lineHeight,
+      fontFamily: typography.caption.fontFamily,
       color: colors.danger,
       marginTop: Spacing.xxs,
     },

@@ -7,13 +7,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CategoryPill, PromoBanner, SectionHeader } from '@/src/components/common';
 import { LaundryCard } from '@/src/components/laundry';
 import { NotificationBadge } from '@/src/components/notification';
-import { Chip, EmptyState, Input } from '@/src/components/ui';
-import { categories, laundries, mockUser, promotions, services, type Laundry } from '@/src/data/mock';
-import { getUnreadNotificationCount } from '@/src/data/mock/notifications';
+import { Chip, EmptyState, ErrorState, Input, LoadingState } from '@/src/components/ui';
+import { isSupabaseDataSource } from '@/src/config/dataSource';
+import { categories, mockUser, promotions, services } from '@/src/data/mock';
+import { useLaundries } from '@/src/hooks/useLaundries';
+import { useNotifications } from '@/src/hooks/useNotifications';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { useTranslation } from '@/src/i18n';
-import { useNotificationsStore } from '@/src/store/notifications';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useAuthStore } from '@/src/store/auth';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
+import type { Laundry } from '@/src/types/laundry';
 import { matchesSearch } from '@/src/utils/search';
 
 // `/shops` and `/notifications` are index routes; the local typed-routes
@@ -23,21 +27,50 @@ import { matchesSearch } from '@/src/utils/search';
 const SHOPS_HREF = '/shops' as Href;
 const NOTIFICATIONS_HREF = '/notifications' as Href;
 
+// WashGo's launch city (see app/about, docs/01_PROJECT_FOUNDATION.md) — a
+// real product default, not the mock user. Used in Supabase mode only until
+// a saved-address store exists to prefer the customer's default address.
+const DEFAULT_LOCATION_LABEL = 'Siem Reap, Cambodia';
+
+function firstNameFrom(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] ?? '';
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const { t } = useTranslation();
   const promotion = promotions[0];
   const [searchQuery, setSearchQuery] = useState('');
-  const notifications = useNotificationsStore((state) => state.notifications);
-  const unreadNotificationCount = useMemo(() => getUnreadNotificationCount(notifications), [notifications]);
+  const { unreadCount: unreadNotificationCount } = useNotifications();
+  const { laundries, loading: laundriesLoading, error: laundriesError, reload: reloadLaundries } = useLaundries();
+
+  const authProfile = useAuthStore((state) => state.profile);
+  const authUser = useAuthStore((state) => state.user);
+
+  // Same fallback chain as the Profile tab: real profile row, then Supabase
+  // Auth's own metadata copy, then a neutral greeting — never mockUser.
+  const metadataFullName = authUser?.user_metadata?.full_name;
+  const authFullName =
+    authProfile?.full_name?.trim() ||
+    (typeof metadataFullName === 'string' ? metadataFullName.trim() : '');
+  const displayFirstName = isSupabaseDataSource
+    ? firstNameFrom(authFullName) || 'there'
+    : mockUser.firstName;
+
+  // No saved-address store is wired up yet (addressService exists but isn't
+  // read from anywhere reactive), so this can't prefer a default address
+  // without fetching from the screen — falls back to the app's real launch
+  // city instead of the mock user's location.
+  const displayLocation = isSupabaseDataSource ? DEFAULT_LOCATION_LABEL : mockUser.location;
 
   const isSearching = searchQuery.trim().length > 0;
 
   const filteredLaundries = useMemo(
     () => laundries.filter((laundry) => matchesSearch(searchQuery, [laundry.name])),
-    [searchQuery]
+    [laundries, searchQuery]
   );
   const filteredServices = useMemo(
     () => services.filter((service) => matchesSearch(searchQuery, [service.title, service.description])),
@@ -58,7 +91,7 @@ export default function HomeScreen() {
         <View style={styles.topRow}>
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-            <Text style={styles.locationText}>{mockUser.location}</Text>
+            <Text style={styles.locationText}>{displayLocation}</Text>
           </View>
           <Pressable
             onPress={() => router.push(NOTIFICATIONS_HREF)}
@@ -77,7 +110,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.greeting}>{t('goodMorning')}, {mockUser.firstName}</Text>
+        <Text style={styles.greeting}>{t('goodMorning')}, {displayFirstName}</Text>
         <Text style={styles.subtitle}>{t('letUsHandleYourLaundry')}</Text>
 
         <Input
@@ -116,7 +149,15 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {hasNoResults ? (
+        {laundriesLoading ? (
+          <View style={styles.section}>
+            <LoadingState message={t('loadingLaundries')} />
+          </View>
+        ) : laundriesError ? (
+          <View style={styles.section}>
+            <ErrorState message={t('unableToLoadLaundries')} retryLabel={t('retry')} onRetry={reloadLaundries} />
+          </View>
+        ) : hasNoResults ? (
           <View style={styles.section}>
             <EmptyState
               title={t('noLaundriesFound')}
@@ -158,7 +199,7 @@ export default function HomeScreen() {
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -194,20 +235,23 @@ const createStyles = (colors: ColorScheme) =>
       right: -4,
     },
     locationText: {
-      fontSize: Typography.caption.fontSize,
+      fontSize: typography.caption.fontSize,
+      fontFamily: typography.caption.fontFamily,
       color: colors.textMuted,
     },
     greeting: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
+      fontSize: typography.headline.fontSize,
+      lineHeight: typography.headline.lineHeight,
+      fontWeight: typography.headline.fontWeight,
+      fontFamily: typography.headline.fontFamily,
       color: colors.text,
       marginBottom: Spacing.xxs,
     },
     subtitle: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      fontWeight: Typography.body.fontWeight,
+      fontSize: typography.body.fontSize,
+      lineHeight: typography.body.lineHeight,
+      fontWeight: typography.body.fontWeight,
+      fontFamily: typography.body.fontFamily,
       color: colors.textMuted,
       marginBottom: Spacing.xl,
     },

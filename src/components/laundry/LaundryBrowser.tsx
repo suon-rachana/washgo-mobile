@@ -4,10 +4,12 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { LaundryCard } from '@/src/components/laundry/LaundryCard';
-import { Chip, EmptyState, Input } from '@/src/components/ui';
-import { laundries, type Laundry } from '@/src/data/mock';
+import { Chip, EmptyState, ErrorState, LoadingState, Input } from '@/src/components/ui';
+import { useLaundries } from '@/src/hooks/useLaundries';
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTranslation } from '@/src/i18n';
 import { Spacing } from '@/src/theme';
+import type { Laundry } from '@/src/types/laundry';
 import { matchesSearch } from '@/src/utils/search';
 
 type LaundryFilter = 'all' | 'open' | 'nearest' | 'topRated';
@@ -24,6 +26,8 @@ const FILTERS: { id: LaundryFilter; label: string }[] = [
 export function LaundryBrowser() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { t } = useTranslation();
+  const { laundries, loading, error, reload } = useLaundries();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<LaundryFilter>('all');
 
@@ -45,7 +49,7 @@ export function LaundryBrowser() {
     }
 
     return list;
-  }, [searchQuery, activeFilter]);
+  }, [laundries, searchQuery, activeFilter]);
 
   const handlePress = (laundry: Laundry) => {
     router.push({ pathname: '/laundry/[id]', params: { id: laundry.id } });
@@ -74,15 +78,21 @@ export function LaundryBrowser() {
         ))}
       </View>
 
-      <View style={styles.list}>
-        {visibleLaundries.length === 0 ? (
-          <EmptyState title="No laundries found" description="Try adjusting your search." />
-        ) : (
-          visibleLaundries.map((laundry) => (
-            <LaundryCard key={laundry.id} laundry={laundry} onPress={handlePress} />
-          ))
-        )}
-      </View>
+      {loading ? (
+        <LoadingState message={t('loadingLaundries')} />
+      ) : error ? (
+        <ErrorState message={t('unableToLoadLaundries')} retryLabel={t('retry')} onRetry={reload} />
+      ) : (
+        <View style={styles.list}>
+          {visibleLaundries.length === 0 ? (
+            <EmptyState title="No laundries found" description="Try adjusting your search." />
+          ) : (
+            visibleLaundries.map((laundry) => (
+              <LaundryCard key={laundry.id} laundry={laundry} onPress={handlePress} />
+            ))
+          )}
+        </View>
+      )}
     </>
   );
 }

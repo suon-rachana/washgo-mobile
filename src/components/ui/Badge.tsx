@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
+import { useTypography } from '@/src/hooks/useTypography';
 import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
 
 export type BadgeVariant = 'neutral' | 'primary' | 'secondary' | 'accent' | 'success' | 'warning' | 'danger';
@@ -27,12 +28,20 @@ const variantStyle = (colors: ColorScheme): Record<BadgeVariant, { backgroundCol
 
 export function Badge({ label, variant = 'neutral', icon, style }: BadgeProps) {
   const colors = useThemeColors();
+  const typography = useTypography();
   const { backgroundColor, color } = variantStyle(colors)[variant];
 
   return (
     <View style={[styles.base, { backgroundColor }, style]}>
       {icon ? <View style={styles.icon}>{icon}</View> : null}
-      <Text style={[styles.text, { color }]}>{label}</Text>
+      <Text
+        style={[
+          styles.text,
+          { color, lineHeight: typography.label.lineHeight, fontFamily: typography.label.fontFamily },
+        ]}
+      >
+        {label}
+      </Text>
     </View>
   );
 }

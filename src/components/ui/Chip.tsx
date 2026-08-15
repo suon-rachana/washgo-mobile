@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { GestureResponderEvent, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 
 export interface ChipProps {
   label: string;
@@ -26,7 +27,8 @@ export function Chip({
   accessibilityHint,
 }: ChipProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
 
   const content = (
     <View
@@ -62,7 +64,7 @@ export function Chip({
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     base: {
       flexDirection: 'row',
@@ -91,10 +93,11 @@ const createStyles = (colors: ColorScheme) =>
       marginRight: Spacing.xxs,
     },
     text: {
-      fontSize: Typography.label.fontSize,
-      lineHeight: Typography.label.lineHeight,
-      fontWeight: Typography.label.fontWeight,
-      letterSpacing: Typography.label.letterSpacing,
+      fontSize: typography.label.fontSize,
+      lineHeight: typography.label.lineHeight,
+      fontWeight: typography.label.fontWeight,
+      letterSpacing: typography.label.letterSpacing,
+      fontFamily: typography.label.fontFamily,
     },
     unselectedText: {
       color: colors.text,

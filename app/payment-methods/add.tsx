@@ -1,14 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { ComponentProps, useMemo } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import type { Ionicons } from '@expo/vector-icons';
+import { ComponentProps } from 'react';
+import { Alert } from 'react-native';
 
 import { MenuRow } from '@/src/components/common';
+import { AppScreen } from '@/src/components/layout';
 import { Card } from '@/src/components/ui';
-import { useThemeColors } from '@/src/hooks/useThemeColors';
 import { useTranslation } from '@/src/i18n';
-import { ColorScheme, Spacing, Typography } from '@/src/theme';
 
 interface AddOption {
   id: string;
@@ -24,10 +21,7 @@ const ADD_OPTIONS: AddOption[] = [
 ];
 
 export default function AddPaymentMethodScreen() {
-  const router = useRouter();
-  const colors = useThemeColors();
   const { t } = useTranslation();
-  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleSelect = (option: AddOption) => {
     // Honest mock — there's no real payment gateway behind this app, so we say
@@ -38,61 +32,18 @@ export default function AddPaymentMethodScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back" style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.title}>Add Payment Method</Text>
-        <Text style={styles.subtitle}>Choose a payment method to link.</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Card variant="outlined" padding="none">
-          {ADD_OPTIONS.map((option, index) => (
-            <MenuRow
-              key={option.id}
-              icon={option.icon}
-              label={option.label}
-              showDivider={index < ADD_OPTIONS.length - 1}
-              onPress={() => handleSelect(option)}
-            />
-          ))}
-        </Card>
-      </ScrollView>
-    </SafeAreaView>
+    <AppScreen title="Add Payment Method">
+      <Card variant="outlined" padding="none">
+        {ADD_OPTIONS.map((option, index) => (
+          <MenuRow
+            key={option.id}
+            icon={option.icon}
+            label={option.label}
+            showDivider={index < ADD_OPTIONS.length - 1}
+            onPress={() => handleSelect(option)}
+          />
+        ))}
+      </Card>
+    </AppScreen>
   );
 }
-
-const createStyles = (colors: ColorScheme) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.md,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      marginBottom: Spacing.sm,
-      marginLeft: -Spacing.xxs,
-    },
-    title: {
-      fontSize: Typography.headline.fontSize,
-      lineHeight: Typography.headline.lineHeight,
-      fontWeight: Typography.headline.fontWeight,
-      color: colors.text,
-      marginBottom: Spacing.xxs,
-    },
-    subtitle: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      color: colors.textMuted,
-    },
-    content: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.xl,
-    },
-  });

@@ -3,7 +3,8 @@ import { ComponentProps, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useThemeColors } from '@/src/hooks/useThemeColors';
-import { ColorScheme, Radius, Spacing, Typography } from '@/src/theme';
+import { useTypography } from '@/src/hooks/useTypography';
+import { ColorScheme, Radius, Spacing } from '@/src/theme';
 
 export type CategoryPillColor = 'primary' | 'accent';
 
@@ -17,7 +18,8 @@ export interface CategoryPillProps {
 
 export function CategoryPill({ label, icon, color = 'primary', onPress, accessibilityHint }: CategoryPillProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typography = useTypography();
+  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
   const tint = color === 'accent' ? colors.accent : colors.primary;
 
   return (
@@ -38,7 +40,7 @@ export function CategoryPill({ label, icon, color = 'primary', onPress, accessib
   );
 }
 
-const createStyles = (colors: ColorScheme) =>
+const createStyles = (colors: ColorScheme, typography: ReturnType<typeof useTypography>) =>
   StyleSheet.create({
     container: {
       alignItems: 'center',
@@ -56,8 +58,9 @@ const createStyles = (colors: ColorScheme) =>
       marginBottom: Spacing.xs,
     },
     label: {
-      fontSize: Typography.caption.fontSize,
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: typography.caption.fontSize,
+      lineHeight: typography.caption.lineHeight,
+      fontFamily: typography.caption.fontFamily,
       color: colors.text,
       textAlign: 'center',
     },
